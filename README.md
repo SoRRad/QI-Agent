@@ -19,12 +19,20 @@ promised:
 
 ## Status
 
-Phase 0 of 9 is complete: scaffold, data model, migrations, seed, the auth
-seam, the design system, the five-destination shell, Docker, and the health
-endpoint. See `PLAN.md` for the build order and the exit criteria for each
-phase. Destination pages currently carry a dated note naming the phase that
-builds the feature behind them, so a demo never implies something works when it
-does not.
+Phases 0 and 1 of 9 are complete.
+
+**Phase 0** — scaffold, data model, migrations, seed, the auth seam, the design
+system, the five-destination shell, Docker, and the health endpoint.
+
+**Phase 1** — `lib/spc`, the statistical engine, built before any chart UI
+exists. Run charts with the four rules, XmR, p, u and c charts with stepped
+limits for variable subgroup sizes, and the Western Electric rules behind a
+flag. 93 tests; every rule and limit, its published source and its test case
+are listed in `docs/VALIDATION.md`.
+
+See `PLAN.md` for the build order and the exit criteria for each phase.
+Destination pages carry a dated note naming the phase that builds the feature
+behind them, so a demo never implies something works when it does not.
 
 ## Local setup
 
@@ -123,7 +131,7 @@ duplicate detection has its own seam at `lib/search/similar.ts`.
   logging, retention, and what this system is explicitly not approved for.
 - `docs/ADR/` — one short record per adapter and architectural choice.
 - `docs/VALIDATION.md` — every SPC test case, its published source, and its
-  expected value. Written in phase 1.
+  expected value. This is the page that answers a challenge to a chart.
 - `docs/PROMPTS.md` — every prompt in plain language, for committee review by
   non-engineers. Written alongside the features that use them.
 

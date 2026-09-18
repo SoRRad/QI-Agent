@@ -14,6 +14,7 @@ import "dotenv/config";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../lib/generated/prisma/client";
 import { loadLibraryDocs } from "../lib/content";
+import { DISCHARGE_SERIES, LAB_SERIES } from "./demo-data";
 
 const connectionString = process.env["DATABASE_URL"];
 if (!connectionString) throw new Error("DATABASE_URL is not set. Copy .env.example to .env.");
@@ -22,43 +23,6 @@ const db = new PrismaClient({ adapter: new PrismaPg({ connectionString }) });
 
 const daysAgo = (n: number): Date => new Date(Date.now() - n * 24 * 60 * 60 * 1000);
 
-/**
- * 24 months of discharge-summary data with a genuine step change at month 13.
- *
- * Verified to fire three run-chart rules against a median of 26.75%:
- *   - shift: 12 consecutive points above, then 12 below (rule 1)
- *   - too few runs: 2 runs across 24 useful observations (rule 3)
- *   - trend: 5 consecutive decreasing points across the step (rule 2)
- *
- * Denominators vary deliberately so the p-chart produces stepped control
- * limits rather than flat ones.
- */
-const DISCHARGE_SERIES: ReadonlyArray<{ label: string; den: number; num: number }> = [
-  { label: "Oct 2024", den: 112, num: 39 },
-  { label: "Nov 2024", den: 104, num: 34 },
-  { label: "Dec 2024", den: 121, num: 43 },
-  { label: "Jan 2025", den: 98, num: 31 },
-  { label: "Feb 2025", den: 116, num: 42 },
-  { label: "Mar 2025", den: 109, num: 36 },
-  { label: "Apr 2025", den: 127, num: 45 },
-  { label: "May 2025", den: 103, num: 32 },
-  { label: "Jun 2025", den: 118, num: 41 },
-  { label: "Jul 2025", den: 95, num: 34 },
-  { label: "Aug 2025", den: 113, num: 37 },
-  { label: "Sep 2025", den: 121, num: 44 },
-  { label: "Oct 2025", den: 107, num: 24 },
-  { label: "Nov 2025", den: 115, num: 23 },
-  { label: "Dec 2025", den: 99, num: 19 },
-  { label: "Jan 2026", den: 122, num: 22 },
-  { label: "Feb 2026", den: 108, num: 21 },
-  { label: "Mar 2026", den: 113, num: 19 },
-  { label: "Apr 2026", den: 101, num: 18 },
-  { label: "May 2026", den: 119, num: 20 },
-  { label: "Jun 2026", den: 106, num: 17 },
-  { label: "Jul 2026", den: 124, num: 22 },
-  { label: "Aug 2026", den: 97, num: 16 },
-  { label: "Sep 2026", den: 111, num: 18 },
-];
 
 async function clear(): Promise<void> {
   // FK-safe order. AuditLog is deliberately absent: it is append-only.
@@ -490,22 +454,7 @@ async function main(): Promise<void> {
       },
     },
   });
-  // A u-chart series: counts over varying patient-day exposure.
-  const labSeries: ReadonlyArray<{ label: string; count: number; days: number }> = [
-    { label: "Jan 2025", count: 1042, days: 452 },
-    { label: "Feb 2025", count: 958, days: 418 },
-    { label: "Mar 2025", count: 1101, days: 476 },
-    { label: "Apr 2025", count: 995, days: 441 },
-    { label: "May 2025", count: 1038, days: 463 },
-    { label: "Jun 2025", count: 902, days: 428 },
-    { label: "Jul 2025", count: 744, days: 455 },
-    { label: "Aug 2025", count: 688, days: 437 },
-    { label: "Sep 2025", count: 651, days: 449 },
-    { label: "Oct 2025", count: 672, days: 468 },
-    { label: "Nov 2025", count: 617, days: 431 },
-    { label: "Dec 2025", count: 634, days: 446 },
-  ];
-  for (const [index, row] of labSeries.entries()) {
+  for (const [index, row] of LAB_SERIES.entries()) {
     await db.dataPoint.create({
       data: {
         measureId: labsMeasure.id,
@@ -863,7 +812,7 @@ async function main(): Promise<void> {
       `  users               6 (1 chair, 2 coaches, 3 trainees)`,
       `  projects            4 (active, complete, stalled, and one deliberately bad draft)`,
       `  library measures    2 (one superseded, to exercise the deprecation banner)`,
-      `  data points         ${DISCHARGE_SERIES.length + labSeries.length}`,
+      `  data points         ${DISCHARGE_SERIES.length + LAB_SERIES.length}`,
       `  pulse responses     ${pulse.length} across 3 CLER domains`,
       `  barriers            3 (raised, at_gmec, closed)`,
       `  knowledge gaps      2`,
