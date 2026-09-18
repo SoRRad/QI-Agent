@@ -1,0 +1,132 @@
+# Self-hosted QI Agent, behind a hospital firewall, with no modification.
+#
+# Everything is on one network with no published Postgres port: only the app
+# is reachable from outside the compose project.
+#
+#   docker compose up --build        start
+#   docker compose run --rm migrate  apply migrations (runs automatically too)
+#   docker compose run --rm seed     load the demo data
+#
+# Assumptions to confirm with institutional IT are listed at the end of
+# docs/DEPLOY.md.
+
+name: qi-agent
+
+x-app-image: &app-image
+  build:
+    context: .
+    args:
+      # Substitute a mandated internal base image here, or pass
+      # --build-arg NODE_IMAGE=... on the command line.
+      NODE_IMAGE: ${NODE_IMAGE:-node:22-bookworm-slim}
+      NPM_REGISTRY: ${NPM_REGISTRY:-https://registry.npmjs.org/}
+
+x-app-env: &app-env
+  DATABASE_URL: postgresql://${POSTGRES_USER:-qi}:${POSTGRES_PASSWORD:-qi}@db:5432/${POSTGRES_DB:-qi_agent}?schema=public
+  # mock | anthropic | azure-openai | openai-compatible.
+  # Where the production enclave has no outbound HTTPS to a public LLM
+  # endpoint, `azure-openai` or `openai-compatible` against an internal
+  # gateway is the expected setting.
+  LLM_PROVIDER: ${LLM_PROVIDER:-mock}
+  ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+  ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-sonnet-5}
+  AZURE_OPENAI_ENDPOINT: ${AZURE_OPENAI_ENDPOINT:-}
+  AZURE_OPENAI_API_KEY: ${AZURE_OPENAI_API_KEY:-}
+  AZURE_OPENAI_DEPLOYMENT: ${AZURE_OPENAI_DEPLOYMENT:-}
+  AZURE_OPENAI_API_VERSION: ${AZURE_OPENAI_API_VERSION:-2024-10-21}
+  OPENAI_COMPATIBLE_BASE_URL: ${OPENAI_COMPATIBLE_BASE_URL:-}
+  OPENAI_COMPATIBLE_API_KEY: ${OPENAI_COMPATIBLE_API_KEY:-}
+  OPENAI_COMPATIBLE_MODEL: ${OPENAI_COMPATIBLE_MODEL:-}
+  # Until SSO is configured, the whole app sits behind one shared passcode.
+  APP_PASSCODE: ${APP_PASSCODE:-}
+  DEV_USER_EMAIL: ${DEV_USER_EMAIL:-}
+  # `log` records the rendered message to the audit table and sends nothing.
+  MAIL_PROVIDER: ${MAIL_PROVIDER:-log}
+  MAIL_FROM: ${MAIL_FROM:-qi-agent@example.edu}
+  SMTP_HOST: ${SMTP_HOST:-}
+  SMTP_PORT: ${SMTP_PORT:-587}
+  SMTP_USER: ${SMTP_USER:-}
+  SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+  RESEND_API_KEY: ${RESEND_API_KEY:-}
+  JOB_SECRET: ${JOB_SECRET:?JOB_SECRET must be set}
+
+services:
+  db:
+    # Postgres 15 or later (Q9). Pinned to a minor line rather than `latest`
+    # so an upgrade is a deliberate act.
+    image: ${POSTGRES_IMAGE:-postgres:16-bookworm}
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-qi}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-qi}
+      POSTGRES_DB: ${POSTGRES_DB:-qi_agent}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    # Deliberately not published to the host: the database is reachable only
+    # from this compose network.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-qi} -d ${POSTGRES_DB:-qi_agent}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  migrate:
+    <<: *app-image
+    command: ["node_modules/.bin/prisma", "migrate", "deploy"]
+    environment: *app-env
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
+  app:
+    <<: *app-image
+    restart: unless-stopped
+    environment: *app-env
+    ports:
+      - "${APP_PORT:-3000}:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  # Demo data. Not part of `up`; run it explicitly.
+  seed:
+    <<: *app-image
+    profiles: ["seed"]
+    command: ["node_modules/.bin/prisma", "db", "seed"]
+    environment: *app-env
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
+  # The nightly stall-detection job (ADR-0001). The job itself is a protected
+  # route, so the scheduler here is a plain curl loop rather than a dependency
+  # on any hosting provider's cron.
+  cron:
+    image: ${CURL_IMAGE:-curlimages/curl:8.11.1}
+    restart: unless-stopped
+    depends_on:
+      app:
+        condition: service_started
+    environment:
+      JOB_SECRET: ${JOB_SECRET:?JOB_SECRET must be set}
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        while true; do
+          # 02:00 local time, once a day.
+          now=$$(date +%H%M)
+          if [ "$$now" = "0200" ]; then
+            curl -fsS -X POST http://app:3000/api/jobs/stall \
+              -H "x-job-secret: $$JOB_SECRET" || true
+            sleep 3600
+          fi
+          sleep 60
+        done
+
+volumes:
+  db-data:
