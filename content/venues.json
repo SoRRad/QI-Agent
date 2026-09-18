@@ -1,0 +1,133 @@
+{
+  "note": "Maintained by the committee. Deadlines are the binding constraint on trainee scholarly output, so review this file each quarter. Month values are 1-12; `rolling` means no fixed deadline.",
+  "lastReviewed": "2026-09-01",
+  "journals": [
+    {
+      "id": "bmj-open-quality",
+      "name": "BMJ Open Quality",
+      "type": "journal",
+      "deadline": "rolling",
+      "wordLimit": 4000,
+      "abstractWordLimit": 300,
+      "structuredAbstract": true,
+      "scope": ["improvement report", "SQUIRE-aligned", "single-site acceptable"],
+      "notes": "The most realistic first journal for completed trainee work. Explicitly expects SQUIRE 2.0."
+    },
+    {
+      "id": "jgme",
+      "name": "Journal of Graduate Medical Education",
+      "type": "journal",
+      "deadline": "rolling",
+      "wordLimit": 3000,
+      "abstractWordLimit": 250,
+      "structuredAbstract": true,
+      "scope": ["GME context", "trainee-led", "educational outcomes"],
+      "notes": "Natural home where the contribution is to graduate medical education rather than to clinical care."
+    },
+    {
+      "id": "bmj-quality-safety",
+      "name": "BMJ Quality & Safety",
+      "type": "journal",
+      "deadline": "rolling",
+      "wordLimit": 5000,
+      "abstractWordLimit": 300,
+      "structuredAbstract": true,
+      "scope": ["generalisable findings", "multi-site", "methodological contribution"],
+      "notes": "Higher bar. Wants findings that transfer beyond the local setting."
+    },
+    {
+      "id": "ajmq",
+      "name": "American Journal of Medical Quality",
+      "type": "journal",
+      "deadline": "rolling",
+      "wordLimit": 3500,
+      "abstractWordLimit": 250,
+      "structuredAbstract": true,
+      "scope": ["health care quality", "systems improvement"]
+    },
+    {
+      "id": "pediatric-quality-safety",
+      "name": "Pediatric Quality & Safety",
+      "type": "journal",
+      "deadline": "rolling",
+      "wordLimit": 4000,
+      "abstractWordLimit": 250,
+      "structuredAbstract": true,
+      "scope": ["paediatric setting"]
+    },
+    {
+      "id": "jcjqps",
+      "name": "Joint Commission Journal on Quality and Patient Safety",
+      "type": "journal",
+      "deadline": "rolling",
+      "wordLimit": 5000,
+      "abstractWordLimit": 250,
+      "structuredAbstract": true,
+      "scope": ["patient safety", "accreditation-relevant", "systems"]
+    },
+    {
+      "id": "academic-medicine",
+      "name": "Academic Medicine",
+      "type": "journal",
+      "deadline": "rolling",
+      "wordLimit": 4000,
+      "abstractWordLimit": 300,
+      "structuredAbstract": true,
+      "scope": ["educational contribution", "curriculum", "GME policy"]
+    }
+  ],
+  "meetings": [
+    {
+      "id": "institutional-gme-symposium",
+      "name": "Institutional GME QI Symposium",
+      "type": "meeting",
+      "deadlineMonth": 3,
+      "abstractWordLimit": 300,
+      "structuredAbstract": true,
+      "headings": ["Background", "Methods", "Results", "Conclusions"],
+      "scope": ["any stage", "in-progress acceptable"],
+      "notes": "The expected first venue. In-progress work is welcome, which makes this the right target for a project with fewer than 12 data points.",
+      "isLocal": true
+    },
+    {
+      "id": "ihi-forum",
+      "name": "IHI Forum",
+      "type": "meeting",
+      "deadlineMonth": 6,
+      "abstractWordLimit": 350,
+      "structuredAbstract": true,
+      "headings": ["Background", "Methods", "Results", "Conclusions"],
+      "scope": ["improvement science", "all settings"]
+    },
+    {
+      "id": "acgme-annual",
+      "name": "ACGME Annual Educational Conference",
+      "type": "meeting",
+      "deadlineMonth": 9,
+      "abstractWordLimit": 250,
+      "structuredAbstract": true,
+      "headings": ["Background", "Methods", "Results", "Discussion"],
+      "scope": ["GME", "CLER-relevant", "programme-level"]
+    },
+    {
+      "id": "aamc-regional",
+      "name": "AAMC Regional Meeting",
+      "type": "meeting",
+      "deadlineMonth": 5,
+      "abstractWordLimit": 300,
+      "structuredAbstract": false,
+      "scope": ["academic medicine", "education"]
+    },
+    {
+      "id": "specialty-society-resident-section",
+      "name": "Specialty Society Annual Meeting — Resident/Fellow Section",
+      "type": "meeting",
+      "deadlineMonth": 1,
+      "abstractWordLimit": 250,
+      "structuredAbstract": true,
+      "headings": ["Introduction", "Methods", "Results", "Conclusions"],
+      "scope": ["specialty-specific", "trainee-only competition"],
+      "notes": "Usually the most realistic first abstract for a trainee. Deadlines vary by society; confirm per specialty."
+    }
+  ]
+}

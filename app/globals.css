@@ -1,0 +1,124 @@
+@import "tailwindcss";
+
+/* ---------------------------------------------------------------------------
+   Design tokens.
+
+   The visual language is statistical process control: chart paper, plotted
+   points, centre lines, annotation. It is deliberately not a generic
+   dashboard.
+
+   Contrast is verified, not assumed (all ratios against `paper`):
+     ink      14.05:1  AAA
+     primary   9.71:1  AAA
+     signal    5.92:1  AA
+     confirm   5.51:1  AA
+     muted     4.68:1  AA   <- the tightest passing pair
+     grid      1.17:1  hairline; decoration only, never carries meaning
+
+   Two rules follow from those numbers and are not stylistic preferences:
+     1. `muted` is for text on `paper` only. On a `grid`-filled surface it
+        measures 4.01:1 and fails AA, so grid-filled surfaces take `ink`.
+     2. `signal` and `confirm` carry meaning only — special cause, pass, fail.
+        Never decorative.
+--------------------------------------------------------------------------- */
+
+@theme {
+  --color-paper: #edf1f2;
+  --color-grid: #d9e1e4;
+  --color-ink: #16232e;
+  --color-muted: #5a6e7a;
+  --color-primary: #1d3f57;
+  --color-signal: #9e3b2f;
+  --color-confirm: #2f6b54;
+
+  /* Surfaces derived from the palette, for panels that must lift off the
+     page without introducing a new hue. */
+  --color-surface: #f7f9fa;
+  --color-surface-sunken: #e4eaec;
+
+  --font-display: var(--font-plex-condensed), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-plex-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-plex-mono), ui-monospace, SFMono-Regular, monospace;
+
+  /* The grid pitch. Everything that wants to feel plotted aligns to this. */
+  --spacing-grid: 24px;
+}
+
+/* ---------------------------------------------------------------------------
+   Page canvas: a faint 24px grid, applied at the page level per the brief.
+--------------------------------------------------------------------------- */
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background-color: var(--color-paper);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    background-image:
+      linear-gradient(to right, var(--color-grid) 1px, transparent 1px),
+      linear-gradient(to bottom, var(--color-grid) 1px, transparent 1px);
+    background-size: 24px 24px;
+    /* Anchor the grid to the top-left so panels can align to it predictably. */
+    background-position: 0 0;
+  }
+
+  /* Display type is condensed, tight, and set in sentence case. */
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-display);
+    letter-spacing: -0.01em;
+    text-wrap: balance;
+  }
+
+  /* One visible focus treatment everywhere, keyboard and mouse alike. Removing
+     it is never an option; this is a clinical tool used one-handed. */
+  :focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+    border-radius: 1px;
+  }
+
+  /* Tabular figures by default for anything numeric: plotted values must not
+     shift width as they change. */
+  [data-numeric],
+  .font-mono,
+  table {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Component-level conventions used across features.
+--------------------------------------------------------------------------- */
+
+@utility eyebrow {
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  line-height: 1;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+}
+
+/* A panel that reads as a piece of chart paper laid on the page. The hairline
+   border and squared corners are the identity; rounded cards are not. */
+@utility plot-frame {
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-grid);
+  box-shadow: 0 1px 0 0 color-mix(in srgb, var(--color-ink) 6%, transparent);
+}

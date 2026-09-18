@@ -1,0 +1,634 @@
+// QI Agent — data model.
+//
+// Conventions that are load-bearing, not stylistic:
+//
+//  * AimStatement and MeasureDefinition are APPEND-ONLY and versioned. A
+//    changed aim or a changed operational definition reinterprets every chart
+//    built on it, so the old text must remain readable. Never mutate a row;
+//    insert the next version. (ADR-0005)
+//  * AuditLog is append-only at the DATABASE level, enforced by a trigger in
+//    migration `append_only_audit`, not by application discipline.
+//  * PdsaCycle carries a CHECK constraint: a cycle cannot be completed while
+//    its prediction is null. The brief makes prediction non-negotiable, so it
+//    is a constraint rather than a validation.
+//  * Enum values deliberately match the strings in the build brief so the Zod
+//    schemas, the API surface and the database agree on one spelling.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../lib/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------------------------------------------------------------- enums
+
+enum Role {
+  trainee
+  coach
+  chair
+}
+
+enum ProjectStatus {
+  draft
+  submitted
+  approved
+  active
+  stalled
+  complete
+  archived
+}
+
+enum MeasureType {
+  outcome
+  process
+  balancing
+}
+
+enum ChartType {
+  run
+  xmr
+  p
+  u
+  c
+}
+
+enum Cadence {
+  daily
+  weekly
+  biweekly
+  monthly
+  quarterly
+  annual
+}
+
+enum ActDecision {
+  adopt
+  adapt
+  abandon
+}
+
+enum BarrierStatus {
+  raised
+  at_gmec
+  decided
+  closed
+}
+
+enum EscalationTarget {
+  committee
+  gmec
+  program
+}
+
+// The six ACGME CLER focus areas.
+enum ClerDomain {
+  patient_safety
+  health_care_quality
+  care_transitions
+  supervision
+  well_being
+  professionalism
+}
+
+enum EventType {
+  symposium
+  committee_meeting
+  workshop
+  cler_mock
+}
+
+enum KnowledgeGapStatus {
+  open
+  doc_planned
+  resolved
+  dismissed
+}
+
+// Instrumentation kinds. These counts are the institutional funding case
+// (addition D4), so collection starts with the schema, not later.
+enum UsageEventKind {
+  session_start
+  ask_query
+  knowledge_gap
+  coach_submission
+  chart_created
+  project_submitted
+  pulse_response
+  handoff_generated
+  export_generated
+}
+
+// ---------------------------------------------------------------- core
+
+model Program {
+  id        String   @id @default(cuid())
+  name      String
+  specialty String
+  pdName    String?
+  acgmeId   String?  @unique
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users             User[]
+  projects          Project[]
+  pulseResponses    PulseResponse[]
+  usageEvents       UsageEvent[]
+
+  @@index([specialty])
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String
+  role      Role     @default(trainee)
+  programId String?
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  program Program? @relation(fields: [programId], references: [id], onDelete: SetNull)
+
+  coachedProjects     Project[]             @relation("ProjectCoach")
+  authoredAims        AimStatement[]        @relation("AimAuthor")
+  enteredDataPoints   DataPoint[]           @relation("DataPointEnteredBy")
+  createdDefinitions  MeasureDefinition[]   @relation("DefinitionAuthor")
+  promotedMeasures    Measure[]             @relation("MeasurePromotedBy")
+  handoffsFrom        Handoff[]             @relation("HandoffFrom")
+  handoffsTo          Handoff[]             @relation("HandoffTo")
+  handoffsAccepted    Handoff[]             @relation("HandoffAcceptedBy")
+  ownedBarriers       Barrier[]             @relation("BarrierOwner")
+  judgeScores         JudgeScore[]          @relation("JudgeScoreJudge")
+  curriculumRecords   CurriculumRecord[]
+  milestoneMaps       MilestoneMap[]        @relation("MilestoneSubject")
+  milestoneReviews    MilestoneMap[]        @relation("MilestonePdReviewer")
+  libraryDocEdits     LibraryDoc[]          @relation("LibraryDocEditor")
+  askedKnowledgeGaps  KnowledgeGap[]        @relation("KnowledgeGapAsker")
+  auditLogs           AuditLog[]
+  usageEvents         UsageEvent[]
+
+  @@index([programId, role])
+  @@index([role])
+}
+
+model Project {
+  id                      String        @id @default(cuid())
+  title                   String
+  problemStatement        String
+  status                  ProjectStatus @default(draft)
+  programId               String
+  // Structured staff-name fields. Exempt from PHI name patterns (Q7) because
+  // they legitimately hold names; their free-text siblings are scanned.
+  clinicalOwner           String?
+  coachId                 String?
+  sponsor                 String?
+  analystContact          String?
+  cohortYear              Int?
+  clerDomain              ClerDomain?
+  equityStratificationPlan String?
+  // Trainee free text about obstacles — restricted to owning program, coach
+  // and chair by the sensitivity policy (Q4).
+  obstacleNotes           String?
+  submittedAt             DateTime?
+  approvedAt              DateTime?
+  completedAt             DateTime?
+  archivedAt              DateTime?
+  // Stall detection (§6.2): recomputed by the nightly job, never by hand.
+  lastActivityAt          DateTime      @default(now())
+  stalledAt               DateTime?
+  createdAt               DateTime      @default(now())
+  updatedAt               DateTime      @updatedAt
+
+  program Program @relation(fields: [programId], references: [id], onDelete: Restrict)
+  coach   User?   @relation("ProjectCoach", fields: [coachId], references: [id], onDelete: SetNull)
+
+  aimStatements       AimStatement[]
+  measures            Measure[]
+  pdsaCycles          PdsaCycle[]
+  handoffs            Handoff[]
+  submissions         Submission[]
+  milestoneMaps       MilestoneMap[]
+  sustainabilityPlan  SustainabilityPlan?
+
+  @@index([programId, status])
+  @@index([status])
+  @@index([clerDomain])
+  @@index([cohortYear])
+  @@index([coachId])
+}
+
+// Append-only. The current aim is the highest version for a project.
+model AimStatement {
+  id             String   @id @default(cuid())
+  projectId      String
+  version        Int
+  text           String
+  baselineValue  Float?
+  baselineUnit   String?
+  baselinePeriod String?
+  target         Float?
+  targetUnit     String?
+  deadline       DateTime?
+  population     String?
+  authorId       String?
+  createdAt      DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  author  User?   @relation("AimAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+
+  @@unique([projectId, version])
+  @@index([projectId])
+}
+
+// A measure's identity. Its operational definition is versioned separately.
+// projectId null => institution-wide library measure (§6.3).
+model Measure {
+  id        String      @id @default(cuid())
+  projectId String?
+  name      String
+  type      MeasureType
+  chartType ChartType
+  isLibrary Boolean     @default(false)
+
+  // Promotion of a local measure to the shared library is a chair action.
+  promotedAt   DateTime?
+  promotedById String?
+
+  // Deprecation (addition C3). Charts built on a superseded definition carry a
+  // banner naming the change and the date; silently changing the meaning of a
+  // shared definition is what destroys trust in year two.
+  deprecated      Boolean   @default(false)
+  deprecatedAt    DateTime?
+  deprecationNote String?
+  supersededById  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  project     Project?  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  promotedBy  User?     @relation("MeasurePromotedBy", fields: [promotedById], references: [id], onDelete: SetNull)
+  supersededBy Measure? @relation("MeasureSupersession", fields: [supersededById], references: [id], onDelete: SetNull)
+  supersedes   Measure[] @relation("MeasureSupersession")
+
+  definitions MeasureDefinition[]
+  dataPoints  DataPoint[]
+  annotations Annotation[]
+  sustainabilityPlans SustainabilityPlan[]
+
+  @@index([projectId])
+  @@index([isLibrary, deprecated])
+  @@index([type])
+}
+
+// Append-only operational definition. The builder refuses to save unless every
+// field is present (§6.3); nullability here is only for the reproducibility
+// fields, which are filled after the user confirms the restatement.
+model MeasureDefinition {
+  id          String   @id @default(cuid())
+  measureId   String
+  version     Int
+  numerator   String
+  denominator String
+  inclusions  String
+  exclusions  String
+  dataSource  String
+  puller      String
+  cadence     Cadence
+  // The LLM restates the definition as a plain-language data query and the
+  // user confirms it matches intent. The restatement is stored as evidence.
+  reproducibilityRestatement String?
+  reproducibilityConfirmedAt DateTime?
+  createdById String?
+  createdAt   DateTime @default(now())
+
+  measure   Measure @relation(fields: [measureId], references: [id], onDelete: Cascade)
+  createdBy User?   @relation("DefinitionAuthor", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@unique([measureId, version])
+  @@index([measureId])
+}
+
+model DataPoint {
+  id          String   @id @default(cuid())
+  measureId   String
+  // periodIndex gives deterministic chart ordering; periodLabel is for display.
+  periodIndex Int
+  periodLabel String
+  numerator   Float?
+  denominator Float?
+  // Computed in TypeScript on write, never by the LLM (constraint 1).
+  value       Float
+  // Subgroup size for p and u charts with variable denominators, which produce
+  // stepped control limits.
+  subgroupSize Float?
+  notes       String?
+  enteredById String?
+  createdAt   DateTime @default(now())
+
+  measure   Measure @relation(fields: [measureId], references: [id], onDelete: Cascade)
+  enteredBy User?   @relation("DataPointEnteredBy", fields: [enteredById], references: [id], onDelete: SetNull)
+
+  @@unique([measureId, periodIndex])
+  @@index([measureId, periodIndex])
+}
+
+model Annotation {
+  id          String   @id @default(cuid())
+  measureId   String
+  date        DateTime
+  label       String
+  description String?
+  // Optional anchor to a plotted period so the marker lands on the right x.
+  periodIndex Int?
+  createdAt   DateTime @default(now())
+
+  measure Measure @relation(fields: [measureId], references: [id], onDelete: Cascade)
+
+  @@index([measureId])
+}
+
+model PdsaCycle {
+  id        String @id @default(cuid())
+  projectId String
+  number    Int
+  plan      String
+  // Non-negotiable: a cycle cannot be completed without a prediction. Enforced
+  // by a CHECK constraint, not only by the UI.
+  prediction   String?
+  doAction     String?
+  studyResult  String?
+  actDecision  ActDecision?
+  plannedStart DateTime?
+  plannedEnd   DateTime?
+  completedAt  DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, number])
+  @@index([projectId])
+}
+
+model Handoff {
+  id              String   @id @default(cuid())
+  projectId       String
+  fromUserId      String?
+  toUserId        String?
+  summary         String
+  openItems       String
+  dataAccessNotes String
+  nextActions     String[]
+  coachContact    String?
+  createdAt       DateTime @default(now())
+
+  // Addition C1: an unaccepted handoff older than 14 days is its own stall
+  // signal. Rotation is what kills these projects; an email is not a record.
+  acceptedAt   DateTime?
+  acceptedById String?
+
+  project    Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  fromUser   User?   @relation("HandoffFrom", fields: [fromUserId], references: [id], onDelete: SetNull)
+  toUser     User?   @relation("HandoffTo", fields: [toUserId], references: [id], onDelete: SetNull)
+  acceptedBy User?   @relation("HandoffAcceptedBy", fields: [acceptedById], references: [id], onDelete: SetNull)
+
+  @@index([projectId])
+  @@index([acceptedAt])
+}
+
+model SustainabilityPlan {
+  id                  String   @id @default(cuid())
+  projectId           String   @unique
+  changeOwner         String
+  continuingMeasureId String?
+  cadence             Cadence
+  reviewer            String
+  notes               String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  project           Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  continuingMeasure Measure? @relation(fields: [continuingMeasureId], references: [id], onDelete: SetNull)
+}
+
+// ---------------------------------------------------------------- pulse
+
+model PulseResponse {
+  id         String      @id @default(cuid())
+  quarter    String
+  confidence Int
+  clerDomain ClerDomain?
+  barrierText String?
+  // Identification is genuinely optional and labelled as follow-up only.
+  respondentName String?
+  programId      String?
+  // Warn-tier PHI acknowledgement (Q5/Q7). Block-tier text never reaches here.
+  phiAcknowledgedAt    DateTime?
+  phiAcknowledgedFlags Json?
+  createdAt DateTime @default(now())
+
+  program  Program?  @relation(fields: [programId], references: [id], onDelete: SetNull)
+  barriers Barrier[] @relation("BarrierPulseResponses")
+
+  @@index([quarter])
+  @@index([programId, quarter])
+  @@index([clerDomain])
+}
+
+model Barrier {
+  id               String           @id @default(cuid())
+  themeLabel       String
+  // Paraphrased summary only. Never a verbatim quote (§6.4).
+  summary          String
+  count            Int              @default(0)
+  status           BarrierStatus    @default(raised)
+  escalationTarget EscalationTarget @default(committee)
+  ownerId          String?
+  decision         String?
+  // Trainee-facing "what changed" text for the digest (addition C2).
+  whatChanged      String?
+  quarter          String?
+  raisedAt         DateTime         @default(now())
+  atGmecAt         DateTime?
+  decidedAt        DateTime?
+  closedAt         DateTime?
+  updatedAt        DateTime         @updatedAt
+
+  owner          User?           @relation("BarrierOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  pulseResponses PulseResponse[] @relation("BarrierPulseResponses")
+
+  @@index([status])
+  @@index([quarter])
+}
+
+// ---------------------------------------------------------------- committee
+
+model Event {
+  id              String    @id @default(cuid())
+  quarter         String
+  type            EventType
+  date            DateTime
+  title           String?
+  agenda          String?
+  materials       String?
+  afterActionNote String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  submissions Submission[]
+
+  @@index([quarter])
+}
+
+model Submission {
+  id         String   @id @default(cuid())
+  eventId    String
+  projectId  String
+  abstract   String
+  presenters String
+  createdAt  DateTime @default(now())
+
+  event   Event        @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  project Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  scores  JudgeScore[]
+
+  @@unique([eventId, projectId])
+  @@index([eventId])
+}
+
+model JudgeScore {
+  id           String   @id @default(cuid())
+  submissionId String
+  judgeId      String
+  rubricScores Json
+  comments     String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  submission Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  judge      User       @relation("JudgeScoreJudge", fields: [judgeId], references: [id], onDelete: Cascade)
+
+  @@unique([submissionId, judgeId])
+  @@index([submissionId])
+}
+
+model CurriculumRecord {
+  id          String   @id @default(cuid())
+  userId      String
+  item        String
+  completedAt DateTime?
+  source      String?
+  createdAt   DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, item])
+  @@index([userId])
+}
+
+model MilestoneMap {
+  id            String   @id @default(cuid())
+  projectId     String
+  userId        String
+  milestoneCode String
+  evidenceText  String
+  generatedAt   DateTime @default(now())
+  // Always a draft until a program director signs off (§6.6).
+  pdReviewedAt   DateTime?
+  pdReviewedById String?
+
+  project      Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user         User    @relation("MilestoneSubject", fields: [userId], references: [id], onDelete: Cascade)
+  pdReviewedBy User?   @relation("MilestonePdReviewer", fields: [pdReviewedById], references: [id], onDelete: SetNull)
+
+  @@index([projectId])
+  @@index([userId])
+}
+
+// ---------------------------------------------------------------- library
+
+model LibraryDoc {
+  id      String  @id @default(cuid())
+  slug    String  @unique
+  title   String
+  body    String
+  // isLocal documents are placeholders requiring institutional policy. They
+  // render with a persistent LOCAL badge, and any Ask answer citing one
+  // carries a banner (Q1).
+  isLocal Boolean @default(false)
+  // For isLocal placeholders: exactly which fields the institution must supply.
+  localFieldsRequired String[]
+  version     Int      @default(1)
+  updatedById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  updatedBy User? @relation("LibraryDocEditor", fields: [updatedById], references: [id], onDelete: SetNull)
+
+  resolvedGaps KnowledgeGap[] @relation("KnowledgeGapResolvedBy")
+
+  @@index([isLocal])
+}
+
+// Questions Ask could not answer from the library. This is the queue of
+// documents the institution still owes, reviewed by the chair (§6.1).
+model KnowledgeGap {
+  id         String             @id @default(cuid())
+  question   String
+  gapSummary String?
+  status     KnowledgeGapStatus @default(open)
+  askCount   Int                @default(1)
+  askedById  String?
+  resolvedByDocId String?
+  createdAt  DateTime           @default(now())
+  updatedAt  DateTime           @updatedAt
+
+  askedBy       User?       @relation("KnowledgeGapAsker", fields: [askedById], references: [id], onDelete: SetNull)
+  resolvedByDoc LibraryDoc? @relation("KnowledgeGapResolvedBy", fields: [resolvedByDocId], references: [id], onDelete: SetNull)
+
+  @@index([status])
+}
+
+// ---------------------------------------------------------------- audit
+
+// Append-only. A trigger rejects UPDATE and DELETE. Chair-only read (Q4).
+// Never stores text that tripped a PHI block — only that a block occurred,
+// the flag types, and the user (Q5).
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  action    String
+  entity    String?
+  entityId  String?
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([entity, entityId])
+  @@index([createdAt])
+  @@index([action])
+}
+
+model UsageEvent {
+  id        String         @id @default(cuid())
+  kind      UsageEventKind
+  userId    String?
+  role      Role?
+  programId String?
+  entityId  String?
+  metadata  Json?
+  createdAt DateTime       @default(now())
+
+  user    User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  program Program? @relation(fields: [programId], references: [id], onDelete: SetNull)
+
+  @@index([kind, createdAt])
+  @@index([programId, kind])
+  @@index([role, kind])
+}
