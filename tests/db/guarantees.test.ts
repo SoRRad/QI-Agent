@@ -200,6 +200,57 @@ describe.skipIf(!db)("database-level guarantees", () => {
         expect(updated.reproducibilityConfirmedAt).not.toBeNull();
       });
     });
+
+    it("locks the restatement once it is confirmed, and refuses a confirmation with nothing to confirm", async () => {
+      // Reproducibility evidence is written once (migration
+      // definition_evidence_lock): a confirmed restatement cannot be swapped
+      // for a different one afterwards.
+      const definition = (tx: PrismaClient, measureId: string) =>
+        tx.measureDefinition.create({
+          data: { measureId, version: 1, numerator: "N", denominator: "D", inclusions: "I", exclusions: "E", dataSource: "S", puller: "P", cadence: "monthly" },
+        });
+
+      await inRollback(async (tx) => {
+        const measure = await tx.measure.create({ data: { name: "M", type: "outcome", chartType: "p", isLibrary: true } });
+        const def = await definition(tx, measure.id);
+        // Regenerating before confirmation is fine.
+        await tx.measureDefinition.update({ where: { id: def.id }, data: { reproducibilityRestatement: "First draft." } });
+        await tx.measureDefinition.update({ where: { id: def.id }, data: { reproducibilityRestatement: "Second draft." } });
+        await tx.measureDefinition.update({ where: { id: def.id }, data: { reproducibilityConfirmedAt: new Date() } });
+        await expect(
+          tx.measureDefinition.update({ where: { id: def.id }, data: { reproducibilityRestatement: "A different reading." } }),
+        ).rejects.toThrow(/confirmed restatement/i);
+      });
+
+      await inRollback(async (tx) => {
+        const measure = await tx.measure.create({ data: { name: "M", type: "outcome", chartType: "p", isLibrary: true } });
+        const def = await definition(tx, measure.id);
+        await expect(
+          tx.measureDefinition.update({ where: { id: def.id }, data: { reproducibilityConfirmedAt: new Date() } }),
+        ).rejects.toThrow(/needs a restatement/i);
+      });
+    });
+  });
+
+  it("refuses to delete a user the audit log names", async () => {
+    // Deleting a user must not rewrite who did what. Deactivate instead.
+    await inRollback(async (tx) => {
+      const person = await tx.user.create({ data: { email: `audit-${Date.now()}@example.test`, name: "T" } });
+      await tx.auditLog.create({ data: { action: "job.run", userId: person.id } });
+      await expect(tx.user.delete({ where: { id: person.id } })).rejects.toThrow();
+    });
+  });
+
+  it("has the trigram indexes duplicate detection relies on", async () => {
+    // Regression: these once existed only in hand-written SQL, and a generated
+    // migration dropped them as unknown. They are now declared in the schema;
+    // this catches it if that ever regresses.
+    const rows = await client.$queryRaw<Array<{ indexname: string }>>`
+      SELECT indexname FROM pg_indexes WHERE indexname IN ('project_title_trgm_idx', 'project_problem_statement_trgm_idx')`;
+    expect(rows.map((r) => r.indexname).sort()).toEqual([
+      "project_problem_statement_trgm_idx",
+      "project_title_trgm_idx",
+    ]);
   });
 
   it("keeps a project record when its program is removed", async () => {

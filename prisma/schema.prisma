@@ -219,6 +219,12 @@ model Project {
   @@index([clerDomain])
   @@index([cohortYear])
   @@index([coachId])
+  // Trigram indexes for duplicate detection (ADR-0003). Declared here so that
+  // Prisma owns them: when they existed only in hand-written SQL, a generated
+  // migration dropped them as unknown. pg_trgm itself is created by the
+  // `hard_guarantees` migration.
+  @@index([title(ops: raw("gin_trgm_ops"))], type: Gin, map: "project_title_trgm_idx")
+  @@index([problemStatement(ops: raw("gin_trgm_ops"))], type: Gin, map: "project_problem_statement_trgm_idx")
 }
 
 // Append-only. The current aim is the highest version for a project.
@@ -258,6 +264,11 @@ model Measure {
   promotedAt   DateTime?
   promotedById String?
 
+  // A project measure built on a shared library definition (§6.3: "projects
+  // link to a library measure or declare a local one"). When that library
+  // measure is superseded, every chart built on it carries the banner below.
+  basedOnId String?
+
   // Deprecation (addition C3). Charts built on a superseded definition carry a
   // banner naming the change and the date; silently changing the meaning of a
   // shared definition is what destroys trust in year two.
@@ -273,6 +284,8 @@ model Measure {
   promotedBy  User?     @relation("MeasurePromotedBy", fields: [promotedById], references: [id], onDelete: SetNull)
   supersededBy Measure? @relation("MeasureSupersession", fields: [supersededById], references: [id], onDelete: SetNull)
   supersedes   Measure[] @relation("MeasureSupersession")
+  basedOn      Measure?  @relation("MeasureBasedOn", fields: [basedOnId], references: [id], onDelete: SetNull)
+  derivedMeasures Measure[] @relation("MeasureBasedOn")
 
   definitions MeasureDefinition[]
   dataPoints  DataPoint[]
@@ -282,6 +295,7 @@ model Measure {
   @@index([projectId])
   @@index([isLibrary, deprecated])
   @@index([type])
+  @@index([basedOnId])
 }
 
 // Append-only operational definition. The builder refuses to save unless every
@@ -607,7 +621,11 @@ model AuditLog {
   metadata  Json?
   createdAt DateTime @default(now())
 
-  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+  // RESTRICT, not SET NULL: deleting a user must not rewrite who did what.
+  // A user with audit history is deactivated, never deleted (docs/SSO.md).
+  // With SET NULL the delete would cascade into an UPDATE that the
+  // append-only trigger refuses anyway; RESTRICT says so plainly.
+  user User? @relation(fields: [userId], references: [id], onDelete: Restrict)
 
   @@index([userId])
   @@index([entity, entityId])

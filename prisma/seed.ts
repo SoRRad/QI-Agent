@@ -14,7 +14,7 @@ import "dotenv/config";
 import { createDb } from "@/lib/db";
 import { loadLibraryDocs } from "@/lib/content";
 import { runWithContext } from "@/lib/request-context";
-import { DISCHARGE_SERIES, LAB_SERIES } from "./demo-data";
+import { DISCHARGE_SERIES, LAB_SERIES, READMISSION_SERIES } from "./demo-data";
 
 // The seed writes through the SAME guarded client as the application. It runs
 // as trusted content, so warn-tier flags (the full dates in PDSA notes, for
@@ -44,13 +44,16 @@ async function clear(): Promise<void> {
   await db.annotation.deleteMany();
   await db.dataPoint.deleteMany();
   await db.measureDefinition.deleteMany();
-  await db.measure.updateMany({ data: { supersededById: null } });
+  await db.measure.updateMany({ data: { supersededById: null, basedOnId: null } });
   await db.measure.deleteMany();
   await db.aimStatement.deleteMany();
   await db.usageEvent.deleteMany();
   await db.project.deleteMany();
-  await db.user.deleteMany();
-  await db.program.deleteMany();
+  // Users and programs are NOT deleted. The audit log may name them, and it
+  // is append-only: deleting a user would rewrite who did what, which the
+  // database refuses. They are upserted below by their natural keys instead,
+  // which also keeps their ids stable across reseeds, so the audit trail
+  // keeps pointing at the right people.
 }
 
 async function main(): Promise<void> {
@@ -72,42 +75,30 @@ async function main(): Promise<void> {
   const localCount = docs.filter((d) => d.isLocal).length;
 
   // --------------------------------------------------------------- programs
-  const medicine = await db.program.create({
-    data: {
-      name: "Internal Medicine Residency",
-      specialty: "Internal Medicine",
-      pdName: "Dr. A. Okonkwo",
-      acgmeId: "1401200001",
-    },
+  const program = (data: { name: string; specialty: string; pdName: string; acgmeId: string }) =>
+    db.program.upsert({ where: { acgmeId: data.acgmeId }, create: data, update: { ...data, active: true } });
+  const medicine = await program({
+    name: "Internal Medicine Residency",
+    specialty: "Internal Medicine",
+    pdName: "Dr. A. Okonkwo",
+    acgmeId: "1401200001",
   });
-  const surgery = await db.program.create({
-    data: {
-      name: "General Surgery Residency",
-      specialty: "General Surgery",
-      pdName: "Dr. M. Baptiste",
-      acgmeId: "4401200002",
-    },
+  const surgery = await program({
+    name: "General Surgery Residency",
+    specialty: "General Surgery",
+    pdName: "Dr. M. Baptiste",
+    acgmeId: "4401200002",
   });
 
   // ------------------------------------------------------------------ users
-  const chair = await db.user.create({
-    data: { email: "chair@example.edu", name: "Dr. R. Adeyemi", role: "chair", programId: medicine.id },
-  });
-  const coachMed = await db.user.create({
-    data: { email: "coach.medicine@example.edu", name: "Dr. S. Lindqvist", role: "coach", programId: medicine.id },
-  });
-  const coachSurg = await db.user.create({
-    data: { email: "coach.surgery@example.edu", name: "Dr. T. Nakamura", role: "coach", programId: surgery.id },
-  });
-  const traineeMed1 = await db.user.create({
-    data: { email: "resident1.medicine@example.edu", name: "Dr. J. Oyelaran", role: "trainee", programId: medicine.id },
-  });
-  const traineeMed2 = await db.user.create({
-    data: { email: "resident2.medicine@example.edu", name: "Dr. P. Whitfield", role: "trainee", programId: medicine.id },
-  });
-  const traineeSurg = await db.user.create({
-    data: { email: "resident1.surgery@example.edu", name: "Dr. K. Aluko", role: "trainee", programId: surgery.id },
-  });
+  const user = (data: { email: string; name: string; role: "chair" | "coach" | "trainee"; programId: string }) =>
+    db.user.upsert({ where: { email: data.email }, create: data, update: { ...data, active: true } });
+  const chair = await user({ email: "chair@example.edu", name: "Dr. R. Adeyemi", role: "chair", programId: medicine.id });
+  const coachMed = await user({ email: "coach.medicine@example.edu", name: "Dr. S. Lindqvist", role: "coach", programId: medicine.id });
+  const coachSurg = await user({ email: "coach.surgery@example.edu", name: "Dr. T. Nakamura", role: "coach", programId: surgery.id });
+  const traineeMed1 = await user({ email: "resident1.medicine@example.edu", name: "Dr. J. Oyelaran", role: "trainee", programId: medicine.id });
+  const traineeMed2 = await user({ email: "resident2.medicine@example.edu", name: "Dr. P. Whitfield", role: "trainee", programId: medicine.id });
+  const traineeSurg = await user({ email: "resident1.surgery@example.edu", name: "Dr. K. Aluko", role: "trainee", programId: surgery.id });
 
   // ------------------------------------------------- library (shared) measure
   // A superseded pair, so the deprecation banner (addition C3) is visible in
@@ -301,6 +292,45 @@ async function main(): Promise<void> {
         // Computed here in TypeScript, never by a model (constraint 1).
         value: (point.num / point.den) * 100,
         subgroupSize: point.den,
+        enteredById: traineeMed1.id,
+      },
+    });
+  }
+
+  // Built on the SUPERSEDED 2024 readmission definition, so its chart carries
+  // the deprecation banner.
+  const readmission = await db.measure.create({
+    data: {
+      projectId: discharge.id,
+      name: "30-day readmission, Hospitalist service",
+      type: "outcome",
+      chartType: "p",
+      basedOnId: readmissionV1.id,
+      definitions: {
+        create: {
+          version: 1,
+          numerator: "Index admissions followed by any inpatient readmission within 30 days of discharge, including observation stays.",
+          denominator: "All adult discharges from the Hospitalist service in the measurement month.",
+          inclusions: "Age 18+; discharged alive; Hospitalist service.",
+          exclusions: "Planned readmissions; transfers to another acute facility; deaths during index stay.",
+          dataSource: "EDW inpatient encounter table",
+          puller: "Decision Support — R. Iyer",
+          cadence: "monthly",
+          createdById: traineeMed1.id,
+        },
+      },
+    },
+  });
+  for (const [index, point] of READMISSION_SERIES.entries()) {
+    await db.dataPoint.create({
+      data: {
+        measureId: readmission.id,
+        periodIndex: index + 1,
+        periodLabel: point.label,
+        numerator: point.readmitted,
+        denominator: point.discharges,
+        value: (point.readmitted / point.discharges) * 100,
+        subgroupSize: point.discharges,
         enteredById: traineeMed1.id,
       },
     });
@@ -814,7 +844,7 @@ async function main(): Promise<void> {
       `  users               6 (1 chair, 2 coaches, 3 trainees)`,
       `  projects            4 (active, complete, stalled, and one deliberately bad draft)`,
       `  library measures    2 (one superseded, to exercise the deprecation banner)`,
-      `  data points         ${DISCHARGE_SERIES.length + LAB_SERIES.length}`,
+      `  data points         ${DISCHARGE_SERIES.length + LAB_SERIES.length + READMISSION_SERIES.length}`,
       `  pulse responses     ${pulse.length} across 3 CLER domains`,
       `  barriers            3 (raised, at_gmec, closed)`,
       `  knowledge gaps      2`,

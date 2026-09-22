@@ -5,6 +5,7 @@ import { BarrierStatusPill } from "@/components/ui/StatusPill";
 import { PhaseNote } from "@/components/ui/PhaseNote";
 
 export const dynamic = "force-dynamic";
+export const metadata = { title: "Pulse" };
 
 export default async function PulsePage() {
   await getCurrentUser();

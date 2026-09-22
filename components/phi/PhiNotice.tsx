@@ -18,19 +18,28 @@ import { Banner } from "@/components/ui/primitives";
  */
 export function PhiNotice({
   feedback,
-  text,
-  path,
+  text = "",
+  path = "",
+  fields,
 }: {
   feedback: PhiErrorBody;
   /** The text as it was when submitted — the offsets refer to it. */
-  text: string;
+  text?: string;
   /** Which field's flags to highlight. */
-  path: string;
+  path?: string;
+  /**
+   * For multi-field forms: each field's submitted text, keyed by its path in
+   * the write, with a label. Every flagged field is highlighted in turn.
+   */
+  fields?: Array<{ path: string; label: string; text: string }>;
 }) {
   const [confirmed, setConfirmed] = useState(false);
   const blocked = feedback.error === "phi_blocked";
   const flags = feedback.flags.filter((f) => f.path === path);
   const messages = [...new Set(feedback.flags.map((f) => f.message))];
+  const flaggedFields = (fields ?? [])
+    .map((field) => ({ ...field, spans: feedback.flags.filter((f) => f.path === field.path) }))
+    .filter((field) => field.spans.length > 0 && field.text);
 
   return (
     <div className="flex flex-col gap-3" role="alert" aria-live="assertive">
@@ -57,6 +66,9 @@ export function PhiNotice({
       </Banner>
 
       {flags.length > 0 && text && <Highlighted text={text} spans={flags} />}
+      {flaggedFields.map((field) => (
+        <Highlighted key={field.path} text={field.text} spans={field.spans} label={field.label} />
+      ))}
 
       {!blocked && (
         <label className="flex items-start gap-2 text-sm text-ink">
@@ -78,7 +90,15 @@ export function PhiNotice({
   );
 }
 
-function Highlighted({ text, spans }: { text: string; spans: Array<{ start: number; end: number }> }) {
+function Highlighted({
+  text,
+  spans,
+  label = "What you wrote",
+}: {
+  text: string;
+  spans: Array<{ start: number; end: number }>;
+  label?: string;
+}) {
   const ordered = [...spans].sort((a, b) => a.start - b.start);
   const parts: React.ReactNode[] = [];
   let cursor = 0;
@@ -96,7 +116,7 @@ function Highlighted({ text, spans }: { text: string; spans: Array<{ start: numb
 
   return (
     <div className="border border-grid bg-surface px-3 py-2 text-sm whitespace-pre-wrap text-ink">
-      <span className="eyebrow mb-1 block">What you wrote</span>
+      <span className="eyebrow mb-1 block">{label}</span>
       {parts}
     </div>
   );

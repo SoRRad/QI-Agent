@@ -182,3 +182,75 @@ explanation, labelled "interpretation unavailable". The chart itself is never
 affected: it is drawn from the statistics engine, not from the model.
 
 **Length.** Three or four sentences.
+
+---
+
+## `charts.definition_restatement`
+
+**What it is for.** The reproducibility check on an operational definition. The
+model restates the definition as the data query an analyst would actually run —
+for each period, which records to start from, which to keep and leave out, what
+to count, how the result is formed — and the resident who wrote the definition
+confirms it matches what they meant. The value is in the mismatch: a definition
+that reads clearly to its author often admits two queries, and the restatement
+makes the model pick one where the author can see it.
+
+**What the model is shown.** The measure's name, chart type and cadence, and
+the definition's numerator, denominator, inclusions, exclusions and data
+source. Not the name of the person who pulls the data, and no data points.
+
+**What it must not do.**
+
+- Introduce a number. It may repeat one that appears in the definition — a
+  48-hour window, a potassium threshold — exactly as written, because a
+  restatement that drops the threshold is not a restatement. A number that is
+  not in the definition is rejected.
+- Name a person, or write anything the PHI scanner flags at all. The confirmed
+  restatement is stored as evidence, and because a model wrote it there is no
+  one to acknowledge a warning on its behalf, so it must pass with no flags.
+- Improve the definition. Where the definition is vague it must pick a reading
+  visibly and list the ambiguity separately (up to four questions).
+
+**What happens if it breaks a rule.** The reply is rejected and the model is
+asked once more with the reason; if the second reply also fails, the check is
+shown as unavailable and nothing is stored.
+
+**What is stored.** The restatement, on the definition version it describes.
+When the resident confirms it, the confirmation time is stored too, and from
+then on the database refuses to change either (migration
+`definition_evidence_lock`). A definition whose meaning changes is a new
+version with its own check.
+
+---
+
+## `charts.data_request`
+
+**What it is for.** Drafting a data request an analyst can act on without a
+meeting — the brief calls the data request the single largest source of stalled
+trainee projects.
+
+**What is computed in code, not by the model.** The date range and how many
+periods it covers, the output file's columns, and the rule that the output is
+aggregate counts only: one row per period, no patient-level rows, no
+identifiers. These are assembled around the model's text by
+`lib/charts/dataRequest.ts`.
+
+**What the model is shown.** The operational definition, the project's problem
+statement and current aim where there is one, and the computed date range.
+
+**What the model writes.** The clinical question in one sentence; the systems
+likely to hold the data (starting from the named source, and never inventing a
+table name, because it does not know this hospital's schema); the fields
+needed; the inclusions and exclusions as filter logic; and up to four things
+the analyst should confirm first.
+
+**What it must not do.**
+
+- Introduce a number that is not in what it was given.
+- Ask for a patient identifier. A request mentioning a record number, a patient
+  name or a date of birth is rejected.
+- Write more than one sentence for the clinical question.
+
+**What happens if it breaks a rule.** Rejected and retried once with the
+reason; if the retry fails, the request is shown as unavailable. Nothing is
+stored: the request is a document the resident copies or downloads.

@@ -15,3 +15,4 @@ what would make us revisit it.
 | [0007](0007-data-store.md) | Prisma with an explicit driver adapter |
 | [0008](0008-mail-adapter.md) | Mail behind an adapter, logging by default |
 | [0009](0009-phi-chokepoint-in-the-database-client.md) | The PHI guard runs inside the database client |
+| [0010](0010-spc-studio.md) | The SPC studio: URL state, frozen baselines, special-cause encoding, write-once reproducibility evidence |

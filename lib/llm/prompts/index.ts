@@ -1,5 +1,7 @@
 import { askAnswerPrompt } from "./askAnswer";
 import { chartInterpretationPrompt } from "./chartInterpretation";
+import { dataRequestPrompt } from "./dataRequest";
+import { definitionRestatementPrompt } from "./definitionRestatement";
 import { devilsAdvocatePrompt } from "./devilsAdvocate";
 import { tutorPrompt } from "./tutor";
 import type { PromptDefinition } from "./types";
@@ -12,6 +14,10 @@ export type { AskDocument, AskInput, AskOutput } from "./askAnswer";
 export { tutorPrompt, looksLikeAimStatement } from "./tutor";
 export type { TutorInput, TutorTurn } from "./tutor";
 export { devilsAdvocatePrompt, RISK_CATEGORIES } from "./devilsAdvocate";
+export { definitionRestatementPrompt, restatementSource } from "./definitionRestatement";
+export type { RestatementInput, RestatementOutput } from "./definitionRestatement";
+export { dataRequestPrompt, dataRequestSource } from "./dataRequest";
+export type { DataRequestInput, DataRequestOutput } from "./dataRequest";
 export type { DevilsAdvocateInput, DevilsAdvocateOutput } from "./devilsAdvocate";
 
 /**
@@ -24,4 +30,6 @@ export const ALL_PROMPTS: ReadonlyArray<PromptDefinition<never, unknown>> = [
   tutorPrompt as PromptDefinition<never, unknown>,
   devilsAdvocatePrompt as PromptDefinition<never, unknown>,
   chartInterpretationPrompt as PromptDefinition<never, unknown>,
+  definitionRestatementPrompt as PromptDefinition<never, unknown>,
+  dataRequestPrompt as PromptDefinition<never, unknown>,
 ];

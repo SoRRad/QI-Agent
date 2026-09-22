@@ -5,6 +5,7 @@ import { COMMITTEE_SECTIONS, SectionTabs } from "@/components/ui/SectionTabs";
 import { Badge, Banner, PageHeader, PlotFrame } from "@/components/ui/primitives";
 
 export const dynamic = "force-dynamic";
+export const metadata = { title: "Library admin" };
 
 export default async function LibraryAdminPage({
   searchParams,

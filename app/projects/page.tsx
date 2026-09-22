@@ -5,6 +5,7 @@ import { ProjectStatusPill } from "@/components/ui/StatusPill";
 import { PhaseNote } from "@/components/ui/PhaseNote";
 
 export const dynamic = "force-dynamic";
+export const metadata = { title: "Projects" };
 
 const STALL_DAYS = 42;
 const HANDOFF_ACCEPTANCE_DAYS = 14;

@@ -9,7 +9,9 @@ import { plexCondensed, plexMono, plexSans } from "./fonts";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "QI Agent",
+  // Every page names itself, so a browser tab, history entry or screen
+  // reader announcement says where the user is (WCAG 2.4.2).
+  title: { default: "QI Agent", template: "%s · QI Agent" },
   description:
     "Institution-wide graduate medical education quality improvement: projects, statistical process control, and the committee's record.",
 };

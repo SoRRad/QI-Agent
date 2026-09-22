@@ -5,6 +5,7 @@ import { PhaseNote } from "@/components/ui/PhaseNote";
 import { COMMITTEE_SECTIONS, SectionTabs } from "@/components/ui/SectionTabs";
 
 export const dynamic = "force-dynamic";
+export const metadata = { title: "Committee" };
 
 const STALL_DAYS = 42;
 

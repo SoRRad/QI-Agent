@@ -9,6 +9,7 @@ import { TutorPanel } from "@/components/ask/TutorPanel";
 import { Badge, PageHeader, PlotFrame } from "@/components/ui/primitives";
 
 export const dynamic = "force-dynamic";
+export const metadata = { title: "Ask" };
 
 const MODES = [
   { id: "ask", label: "Ask" },

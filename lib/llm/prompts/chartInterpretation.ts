@@ -62,6 +62,19 @@ export function interpretationValues(input: InterpretationInput): Record<string,
     values[`v${i}_last`] = last !== undefined ? (labels[last] ?? "") : "";
   });
 
+  if (analysis.baseline) {
+    values["baseline_points"] = String(analysis.baseline.length);
+    values["baseline_first"] = analysis.baseline.firstLabel;
+    values["baseline_last"] = analysis.baseline.lastLabel;
+  }
+
+  const beyond = analysis.violations.filter((v) => v.rule === "point_beyond_limits").flatMap((v) => v.pointIndices);
+  if (beyond.length > 0) {
+    values["beyond_limits_points"] = String(new Set(beyond).size);
+    values["beyond_limits_first"] = labels[Math.min(...beyond)] ?? "";
+    values["beyond_limits_last"] = labels[Math.max(...beyond)] ?? "";
+  }
+
   input.annotations.forEach((annotation, i) => {
     values[`a${i}`] = annotation.label;
     const at = annotation.periodIndex !== null ? labels[annotation.periodIndex - 1] : undefined;
@@ -115,6 +128,12 @@ export const chartInterpretationPrompt: PromptDefinition<InterpretationInput, Ou
       "Rules that fired:",
       ...(rules.length > 0 ? rules : ["- none"]),
       "",
+      ...(input.analysis.baseline
+        ? [
+            "Baseline: the centre line (and any limits) were computed from the first {{baseline_points}} points, {{baseline_first}} to {{baseline_last}}, and extended across the later points. Signals after the baseline are changes relative to it.",
+            "",
+          ]
+        : []),
       "Annotations (interventions marked on the chart):",
       ...(annotations.length > 0 ? annotations : ["- none"]),
       "",
@@ -150,9 +169,17 @@ export const chartInterpretationPrompt: PromptDefinition<InterpretationInput, Ou
     if (few >= 0) {
       sentences.push("There are also too few runs, which confirms the points are clustered rather than scattered around the centre line.");
     }
-    const beyond = index("point_beyond_limits");
-    if (beyond >= 0 && !shift) {
-      sentences.push(`A point falls outside the control limits at {{v${beyond}_first}}, which is special cause worth investigating.`);
+    if (index("point_beyond_limits") >= 0) {
+      const frame = analysis.baseline ? " set by the baseline from {{baseline_first}} to {{baseline_last}}" : "";
+      sentences.push(
+        `{{beyond_limits_points}} points fall outside the control limits${frame}, from {{beyond_limits_first}} to {{beyond_limits_last}}. Each is special cause: the process is no longer behaving as it did.`,
+      );
+    }
+    const we = analysis.violations.findIndex((v) => v.rule.startsWith("we_"));
+    if (we >= 0) {
+      sentences.push(
+        `The Western Electric rules also find a pattern from {{v${we}_first}} to {{v${we}_last}}: points clustered on one side of the centre line without crossing a limit.`,
+      );
     }
     if (input.annotations.length > 0 && sentences.length > 0) {
       sentences.push(

@@ -43,3 +43,8 @@ export const COMMITTEE_SECTIONS = [
   { id: "dashboard", label: "Dashboard", href: "/committee" },
   { id: "library", label: "Library", href: "/committee/library" },
 ] as const;
+
+export const CHART_SECTIONS = [
+  { id: "measures", label: "Measures", href: "/charts" },
+  { id: "advisor", label: "Which chart?", href: "/charts/advisor" },
+] as const;

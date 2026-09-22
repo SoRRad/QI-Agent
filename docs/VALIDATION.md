@@ -275,6 +275,30 @@ option, because it looks correct.
 *(This was a real defect, found by the demo-series test and fixed. The two
 cases above are its regression tests.)*
 
+### Computing a frozen baseline
+
+`frozenParameters()` (lib/spc/baseline.ts) computes the frozen values from the
+baseline points themselves; nothing about a baseline is supplied as a number.
+Expected values are computed by hand from the seeded series
+(`tests/spc/baseline.test.ts`).
+
+| Case | Expected | Result |
+|---|---|---|
+| p chart, first 12 discharge months | pooled 458 / 1337, not the mean of the monthly proportions | pass |
+| p chart, frozen at the baseline | identical limits to supplying 458 / 1337 by hand | pass |
+| Run chart | median of the first 12 values | pass |
+| XmR, baseline 10, 12, 11, 13, 12 then 30, 31, 29 | mean 11.6; moving ranges 2, 1, 2, 1 → 1.5, excluding the 12 → 30 jump | pass |
+| XmR, same series | UNPL 11.6 + 2.66 × 1.5; the three later points beyond it | pass |
+| c chart | mean of the baseline counts | pass |
+| Baseline of 1 point, or longer than the series | refused | pass |
+| Baseline under 12 points | analysed, with a note that the centre line is provisional | pass |
+
+**A design decision, not a published result:** against a frozen run-chart
+median, the two runs rules are not applied. The runs table gives the expected
+number of runs about the median of the points being counted, and a baseline
+median extended over later points is not that median. Shifts and trends are
+still applied; the chart shows a note saying so. See ADR-0010.
+
 ---
 
 ## Western Electric supplementary rules
@@ -346,6 +370,30 @@ than hypothetical.
 
 It is also why the run chart is not redundant next to a control chart: the run
 chart's shift rule detected this change regardless of how the limits were set.
+
+---
+
+## Chart-type advisor
+
+`lib/charts/advisor.ts` is a decision tree with no model in its path; a test
+asserts it imports nothing but types from lib/spc. Every leaf is tested
+(`tests/charts/advisor.test.ts`):
+
+| Answers | Recommendation | In the studio today |
+|---|---|---|
+| Classified units, not rare, 12+ periods | p chart (stepped limits if the denominator varies) | p chart |
+| Events, not rare, exposure varies | u chart | u chart |
+| Events, not rare, exposure constant | c chart | c chart |
+| One measurement per period | XmR | XmR |
+| Any of the above, fewer than 12 periods | the same chart, later | run chart |
+| Classified units, rare | g chart | run chart (g not drawn yet) |
+| Events, rare | t chart | run chart (t not drawn yet) |
+| Several measurements per period | X̄ and S chart | XmR of the period averages |
+
+Branches follow Provost & Murray, *The Health Care Data Guide*, and
+Montgomery's treatment of attribute charts. The recommendation for rare events
+is the published one even though the studio cannot yet draw it; recommending a
+p chart because it is available would be wrong.
 
 ---
 
