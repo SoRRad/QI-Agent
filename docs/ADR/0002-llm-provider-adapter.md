@@ -38,13 +38,52 @@ with no credentials, which is the situation the project is actually in.
 The `openai-compatible` provider exists specifically because an internal
 gateway's base URL cannot be predicted.
 
+## Implementation notes (phase 2)
+
+- **Anthropic** uses the official `@anthropic-ai/sdk`, with an injected `fetch`
+  for the contract tests. `baseURL` and `authToken` are passed explicitly, so
+  the SDK never picks up `ANTHROPIC_BASE_URL` or `ANTHROPIC_AUTH_TOKEN` from the
+  host environment and sends a credential the app was not configured with.
+- **Default model `claude-opus-5`.** No model was specified for this system, so
+  the default is the current recommended model rather than a cheaper one chosen
+  on the committee's behalf. `ANTHROPIC_MODEL` changes it.
+- **Server-side refusal fallbacks on by default** (`fallbacks: "default"`,
+  beta `server-side-fallback-2026-07-01`): if the model's safety classifiers
+  decline a request, the API re-runs it on a fallback model within the same
+  call. The audit records the model that actually served each request.
+  `ANTHROPIC_FALLBACKS=off` disables it.
+- **Effort** is left at the API default and exposed as `ANTHROPIC_EFFORT`.
+  `low` and `medium` are worth measuring for the short grounded tasks this
+  system mostly runs; that is a cost decision for the institution.
+- **Azure OpenAI and openai-compatible** share one chat-completions driver over
+  plain `fetch`, since an institution's gateway may speak only the wire format.
+  The token-limit parameter name differs between deployments and is
+  configurable (`LLM_MAX_TOKENS_PARAM`).
+- A refusal, a content filter and a truncated reply are all errors, checked
+  before content is read, so a half-finished answer is never shown.
+- `completeJSON` includes the Zod schema as JSON Schema in the system prompt,
+  validates, and retries once. Structured outputs were considered and deferred:
+  they would make one provider stricter than the other three, and could not be
+  verified against a live endpoint from the build environment.
+
 ## Guard against fabricated numbers
 
-Chart-interpretation prompts receive the computed `SpcAnalysis` object, never a
-raw data array. A numeric guard extracts every numeric token from the model's
-output and rejects the response if a token is not present in the analysis it
-was given. This is the enforcement behind the brief's first constraint; the
-alternative — trusting the prompt — is not enforcement.
+Stricter than first planned. The original design compared numbers in the
+model's output against the computed analysis. The implemented design forbids
+the model from writing a number at all — in digits or in words — and has it
+refer to values through placeholders (`{{centre_line}}`, `{{v0_points}}`) that
+TypeScript fills in from the statistics engine's output.
+
+The brief forbids the model to "compute, round, or restate" a chart number.
+Comparison would still let it restate one, and would need rules for rounding
+("26.7%" versus "26.75%"). Placeholders remove the question: the narration's
+numbers are the chart's numbers because they are the same values.
+
+Anything that could carry a digit — a period label, a measure name such as
+"signed >48h", an annotation such as "Cycle 2" — is a placeholder too, so a
+compliant reply never needs a digit. A reply containing one is rejected and
+retried once; after that the chart is shown with its interpretation marked
+unavailable.
 
 ## Rejected
 

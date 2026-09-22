@@ -138,6 +138,15 @@ a question, not a statement. Take this section into the meeting.
 - [ ] If not, is there an internal LLM gateway? What is its base URL, its
       authentication scheme, and its API shape — Azure OpenAI, or
       OpenAI-compatible?
+- [ ] If a gateway is used: does it speak the chat-completions wire format, and
+      does it expect `max_tokens` or `max_completion_tokens`? Set
+      `LLM_MAX_TOKENS_PARAM` accordingly. Verify with `pnpm smoke:llm` before
+      deployment — it makes one call, prints provider, model and latency, and
+      never prints a key.
+- [ ] If Anthropic's API is used directly: are server-side refusal fallbacks
+      acceptable (a declined request is re-run on another Claude model within
+      the same call)? They are on by default; `ANTHROPIC_FALLBACKS=off`
+      disables them.
 - [ ] Is TLS interception in force on egress? If so, the container needs the
       institution's CA bundle mounted.
 - [ ] What is the inbound route to the application — reverse proxy, load
@@ -168,6 +177,15 @@ a question, not a statement. Take this section into the meeting.
 - [ ] Until one is configured, the system runs with `MAIL_PROVIDER=log`: it
       renders and records messages, and sends nothing. Is that acceptable for
       the pilot?
+
+## PHI scanner
+
+- [ ] Who may edit `config/phi-patterns.json` in production, and through what
+      change process? The file is read at runtime so patterns can be added
+      without a deploy; mount it as a volume and restrict who can write it.
+- [ ] Confirm the one addition to the approved block tier, described in
+      `docs/SECURITY.md`: an identifier keyword immediately followed by a
+      separated number (`DOB: 03/14/1962`, `MRN 12-345-678`).
 
 ## Privacy and approval
 

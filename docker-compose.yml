@@ -28,8 +28,13 @@ x-app-env: &app-env
   # endpoint, `azure-openai` or `openai-compatible` against an internal
   # gateway is the expected setting.
   LLM_PROVIDER: ${LLM_PROVIDER:-mock}
+  LLM_TIMEOUT_MS: ${LLM_TIMEOUT_MS:-60000}
+  LLM_MAX_TOKENS_PARAM: ${LLM_MAX_TOKENS_PARAM:-max_tokens}
   ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
-  ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-sonnet-5}
+  ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-opus-5}
+  ANTHROPIC_BASE_URL: ${ANTHROPIC_BASE_URL:-}
+  ANTHROPIC_FALLBACKS: ${ANTHROPIC_FALLBACKS:-default}
+  ANTHROPIC_EFFORT: ${ANTHROPIC_EFFORT:-}
   AZURE_OPENAI_ENDPOINT: ${AZURE_OPENAI_ENDPOINT:-}
   AZURE_OPENAI_API_KEY: ${AZURE_OPENAI_API_KEY:-}
   AZURE_OPENAI_DEPLOYMENT: ${AZURE_OPENAI_DEPLOYMENT:-}
@@ -37,6 +42,9 @@ x-app-env: &app-env
   OPENAI_COMPATIBLE_BASE_URL: ${OPENAI_COMPATIBLE_BASE_URL:-}
   OPENAI_COMPATIBLE_API_KEY: ${OPENAI_COMPATIBLE_API_KEY:-}
   OPENAI_COMPATIBLE_MODEL: ${OPENAI_COMPATIBLE_MODEL:-}
+  # Committee-maintained PHI scanner extensions, read at runtime. Mount a
+  # volume over /app/config to edit them without rebuilding the image.
+  PHI_PATTERNS_PATH: ${PHI_PATTERNS_PATH:-/app/config/phi-patterns.json}
   # Until SSO is configured, the whole app sits behind one shared passcode.
   APP_PASSCODE: ${APP_PASSCODE:-}
   DEV_USER_EMAIL: ${DEV_USER_EMAIL:-}

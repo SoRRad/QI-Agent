@@ -27,52 +27,140 @@ any answer citing one carries a visible banner.
 **The stance: PHI does not enter the database.** Not redacted, not encrypted,
 not quarantined. It does not arrive.
 
-A server-side scanner runs as middleware on every free-text write. It is not a
-client-side convenience and cannot be bypassed by calling the API directly.
+### Where the scanner runs
+
+Inside the database client itself. The scanner is a Prisma query extension on
+every model's write operations (`lib/phi/extension.ts`), attached in the one
+place a database client is constructed (`lib/db.ts`). A route handler cannot
+forget to call it, because a route handler has no other way to reach the
+database.
+
+That is only a guarantee if nothing can get an unguarded client, so a test
+(`tests/phi/chokepoint.test.ts`) fails the build if any application code:
+
+- constructs its own database client,
+- imports the client class as a value, or
+- writes with raw SQL, which would bypass the extension.
+
+The scanner walks **every** string in a write — top-level fields, nested
+relation writes, updates, array elements, JSON — and scans it. The default is
+to scan: a field added to the schema later is covered without anyone
+remembering to register it. Only identifiers (record ids, foreign keys, email,
+slug) are skipped.
+
+It is not a client-side convenience and cannot be bypassed by calling the API
+directly. The demo seed writes through the same guarded client; a seed run that
+completes is proof that the demo data contains no block-tier content.
+
+Free text sent **to a language model** is scanned the same way before it is
+sent (from phase 3 onward): an external model endpoint is not a safer place
+for an identifier than a database.
 
 ### Two tiers
 
-**Block tier — no attestation path exists.** The write is refused and the user
-must edit the text. There is deliberately no override button, because a
+**Block tier — no acknowledgement path exists.** The write is refused and the
+user must edit the text. There is deliberately no override button, because a
 trainee-facing button that overrides a hard PHI control becomes, within a
-month, the button everyone clicks. Blocked patterns:
+month, the button everyone clicks. Blocked, per the approved tiering (Q7):
 
 - Social Security Number shapes
-- Telephone number shapes
+- Telephone number shapes (with separators, so a list of counts is not one)
 - Any digit string of 9 or more
 - Any digit string of 6 or more within 30 characters of `MRN`, `DOB`, `acct`,
   `account`, `accession` or `record`
 
+**Plus one addition, for the committee to confirm.** As written, the tiering
+lets `DOB: 03/14/1962` and `MRN 12-345-678` through as warn-only, because
+neither contains an unbroken run of six digits. Both are unambiguous
+identifiers, so a fifth block rule catches a strongly identifying keyword —
+`MRN`, `DOB`, `acct`, `accession`, `record number`, `account #` —
+**immediately** followed by a number of six or more digits with separators.
+The plain words "record" and "account" are excluded unless followed by
+"number", "no." or "#", so that "the health record 2025-2026 upgrade" stays
+ordinary prose. This rule is in the false-positive suite like the others.
+
 **Warn tier — any user may acknowledge and proceed.** The acknowledgement and
-the specific flags are written to the audit log. Warned patterns:
+the specific flags are written to the audit log. Warned:
 
 - Bare digit strings of 6 to 8
-- Dates in any format
-- `room` or `bed` adjacent to digits
+- Dates that carry a **day**, in any format: `03/14/2025`, `2025-03-14`,
+  `14 March 2025`, `March 14`. A **month and year alone** — "Jan 2025 –
+  Jun 2025", "July 2025", "Q3 FY2026" — describes a measurement period, not an
+  event in a person's care, and is not flagged. That is what lets "baseline Jan
+  2025 – Jun 2025, n = 412" pass clean, as the approved false-positive suite
+  requires.
+- `room` or `bed` followed by digits ("bed 14"; not "32-bed ward")
 - Capitalised two-word sequences following `patient`, `Mr.`, `Mrs.`, `Ms.` or
-  `Dr.`
+  `Dr.` (the full stop is optional, since "Mr Smith" is common outside the
+  US). After "patient", a committee-maintained stop list suppresses ordinary
+  phrases: "the Patient Safety Committee" is not a name.
 
-### What the audit log records about a block
+### What the audit log records
 
-That a block occurred, the flag types, and the user. **Never the offending
-string.** Text that trips a block is never written to any table, including the
-audit table — storing it to prove it was rejected would defeat the control.
+For a block: that it occurred, the user, the model and field, the rule and the
+character offsets. For an acknowledgement: the same, plus the record it was
+attached to. **Never the offending string** — not in the audit log, not in the
+error returned to the browser, not in a server log. Text that trips a block is
+never written to any table, including the audit table.
 
-### Fields exempt from name patterns
+The record of a block is written on its own connection, outside any enclosing
+transaction, so that it survives the rollback of the write it refused. This is
+tested.
 
-Structured staff-name fields legitimately hold names and are not scanned for
-them: clinical owner, coach, sponsor, analyst contact, judge, and the handoff
-from/to fields. Their free-text siblings are scanned normally.
+Acknowledgement works by fingerprint: the 422 response lists each warn-tier
+flag with an opaque fingerprint, and the resubmission lists the fingerprints
+the user confirmed. A fingerprint changes if the flagged text changes, so an
+acknowledgement cannot be carried over to different text. Fingerprints are
+never stored: a hash of a short date is trivially reversible by brute force.
 
-### Why the tiering exists
+The audit table and the usage table themselves are scanned at block tier only.
+They are written by the system from content that has already passed the guard;
+asking for acknowledgement on an audit write would make no sense, but no code
+path can smuggle an identifier into the audit log either.
 
-The patterns in the brief will flag ordinary QI text — "baseline Jan 2025 –
-Jun 2025, n = 412" contains both a date range and a number, and a handoff
-packet legitimately names a coach. A scanner that cries wolf trains users to
-dismiss it, which is worse than no scanner. The block tier is therefore narrow
-and absolute; the warn tier is broad and advisory. A false-positive suite of
-realistic QI sentences guards the boundary: if that suite goes noisy, the
-tiering is wrong and gets fixed rather than loosened.
+### Fields exempt from particular patterns
+
+Exemptions switch off one **category** of pattern for a field that
+legitimately contains it. Block-tier identifier and contact rules can never be
+exempted: an SSN in the "clinical owner" field is still an SSN.
+
+**Exempt from name patterns** — structured staff-name fields. Named in the
+approved tiering: clinical owner, coach, sponsor, analyst contact, judge, and
+the handoff from/to fields (the latter two are user links, not text).
+Added because they are name fields by nature, listed here so the committee can
+object: program and user names and measure names (`name`), program director
+(`pdName`), the optional pulse respondent name (`respondentName`), symposium
+`presenters`, the data `puller`, and the sustainability plan's `changeOwner`
+and `reviewer`.
+
+**Exempt from date patterns** — the aim statement's `text` and
+`baselinePeriod`. The aim statement standard *requires* a calendar deadline and
+a baseline period, so without this exemption every valid aim would raise a
+warning, and a warning that fires on every aim teaches people to click through
+warnings. A date of birth after "DOB" in an aim is still blocked.
+
+Exemptions are keyed by field name. A test parses the schema and fails if any
+exempt name appears on a model not listed above, so a new model reusing one of
+these names forces a decision rather than silently inheriting the exemption.
+
+### Extending the patterns without a deploy
+
+`config/phi-patterns.json` is read at runtime and re-read when it changes. The
+committee can add block or warn patterns and stop words there. It cannot remove
+or weaken the built-in rules, which live in code: a malformed, empty or deleted
+file leaves the approved control fully in force, and `/api/health` reports
+whether the file loaded. Patterns with nested quantifiers — the shape that can
+hang a server on crafted input — are rejected.
+
+### Why the tiering is shaped this way
+
+The block tier has no override, so a block-tier false positive stops a trainee
+cold. The warn tier is advisory, but a warning that fires on ordinary prose
+trains users to dismiss it. A false-positive suite of 29 realistic QI
+sentences — rates, counts, periods, "the Patient Safety Committee", "accession
+volumes exceeded 250,000" — must pass with **zero** flags in either tier. If
+that suite goes noisy, the tiering is wrong and gets fixed rather than
+loosened.
 
 ## Read visibility
 

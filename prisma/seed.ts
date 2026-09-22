@@ -11,15 +11,17 @@
  */
 
 import "dotenv/config";
-import { PrismaPg } from "@prisma/adapter-pg";
-import { PrismaClient } from "../lib/generated/prisma/client";
-import { loadLibraryDocs } from "../lib/content";
+import { createDb } from "@/lib/db";
+import { loadLibraryDocs } from "@/lib/content";
+import { runWithContext } from "@/lib/request-context";
 import { DISCHARGE_SERIES, LAB_SERIES } from "./demo-data";
 
-const connectionString = process.env["DATABASE_URL"];
-if (!connectionString) throw new Error("DATABASE_URL is not set. Copy .env.example to .env.");
-
-const db = new PrismaClient({ adapter: new PrismaPg({ connectionString }) });
+// The seed writes through the SAME guarded client as the application. It runs
+// as trusted content, so warn-tier flags (the full dates in PDSA notes, for
+// example) pass without an acknowledgement — but block-tier rules still apply,
+// so a seed run that completes is proof the demo data contains no patient
+// identifiers.
+const db = createDb();
 
 const daysAgo = (n: number): Date => new Date(Date.now() - n * 24 * 60 * 60 * 1000);
 
@@ -822,7 +824,7 @@ async function main(): Promise<void> {
   );
 }
 
-main()
+runWithContext({ userId: null, acknowledgedPhi: new Set(), trustedContent: "seed" }, main)
   .catch((error: unknown) => {
     console.error(error);
     process.exit(1);

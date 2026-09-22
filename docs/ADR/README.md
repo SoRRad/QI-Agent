@@ -14,3 +14,4 @@ what would make us revisit it.
 | [0006](0006-pdf-rendering.md) | No headless Chrome in the runtime image; charts rasterised from the UI's own SVG |
 | [0007](0007-data-store.md) | Prisma with an explicit driver adapter |
 | [0008](0008-mail-adapter.md) | Mail behind an adapter, logging by default |
+| [0009](0009-phi-chokepoint-in-the-database-client.md) | The PHI guard runs inside the database client |
