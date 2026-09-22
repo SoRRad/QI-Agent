@@ -2,6 +2,7 @@ import { db } from "@/lib/db";
 import { ForbiddenError, requireRole } from "@/lib/auth";
 import { Badge, Banner, DataPair, PageHeader, PlotFrame } from "@/components/ui/primitives";
 import { PhaseNote } from "@/components/ui/PhaseNote";
+import { COMMITTEE_SECTIONS, SectionTabs } from "@/components/ui/SectionTabs";
 
 export const dynamic = "force-dynamic";
 
@@ -52,6 +53,7 @@ export default async function CommitteePage() {
         title="Chair dashboard"
         lede="The institution's headline trainee-sensitive measure opens this page as an annotated run chart, not a grid of stat cards. Institution-level measures are always plotted over time."
       />
+      <SectionTabs label="Committee sections" current="dashboard" items={COMMITTEE_SECTIONS} />
 
       <div className="flex flex-col gap-4">
         <PhaseNote phase="8">

@@ -4,7 +4,17 @@ import { describe, expect, it } from "vitest";
 import { analyse } from "@/lib/spc";
 import type { Observation } from "@/lib/spc";
 import { renderPlaceholders } from "@/lib/llm/guards/numeric";
-import { ALL_PROMPTS, chartInterpretationPrompt, interpretationValues } from "@/lib/llm/prompts";
+import {
+  ALL_PROMPTS,
+  askAnswerPrompt,
+  chartInterpretationPrompt,
+  devilsAdvocatePrompt,
+  interpretationValues,
+  tutorPrompt,
+} from "@/lib/llm/prompts";
+import { loadLibraryDocs } from "@/lib/content";
+import { validateAim } from "@/lib/aim/validate";
+import { projectFacts } from "@/lib/projects/facts";
 import { runPrompt } from "@/lib/llm/run";
 import { DISCHARGE_SERIES } from "@/prisma/demo-data";
 import { mockDriver } from "@/lib/llm/drivers/mock";
@@ -97,6 +107,96 @@ describe("every mock satisfies its own prompt's checks", () => {
       const output = chartInterpretationPrompt.mock(case_);
       expect(chartInterpretationPrompt.schema.safeParse(output).success).toBe(true);
       expect(chartInterpretationPrompt.refine?.(output, case_)).toBeNull();
+    }
+  });
+});
+
+describe("every mock satisfies its own prompt's checks (Ask)", () => {
+  const documents = loadLibraryDocs().map((d, i) => ({ id: `doc${i}`, title: d.title, isLocal: d.isLocal, body: d.body }));
+
+  for (const question of [
+    "What are the five required elements of an aim statement?",
+    "Do I need an IRB determination before collecting data?",
+    "What parking permit do residents get?",
+  ]) {
+    it(`ask.answer: "${question}"`, () => {
+      const output = askAnswerPrompt.mock({ question, documents });
+      expect(askAnswerPrompt.schema.safeParse(output).success).toBe(true);
+      expect(askAnswerPrompt.refine?.(output, { question, documents })).toBeNull();
+    });
+  }
+
+  it("ask.answer rejects a quote that is not in the cited document", () => {
+    const output = {
+      status: "answered" as const,
+      answer: "x",
+      citations: [{ documentId: "doc0", quote: "This sentence appears in no document at all." }],
+    };
+    expect(askAnswerPrompt.refine?.(output, { question: "q", documents })).toMatch(/does not appear/);
+  });
+
+  it("ask.answer rejects a citation to a document it was not given", () => {
+    const output = {
+      status: "answered" as const,
+      answer: "x",
+      citations: [{ documentId: "invented", quote: "Anything at all, really." }],
+    };
+    expect(askAnswerPrompt.refine?.(output, { question: "q", documents })).toMatch(/not provided/);
+  });
+
+  it("ask.tutor, across several turns", () => {
+    const aimCheck = validateAim({ text: "Improve handoffs in the ICU this year." });
+    const project = { title: "t", problemStatement: "p", aimText: "a", aimCheck };
+    const history: Array<{ role: "tutor" | "trainee"; text: string }> = [];
+    for (let i = 0; i < 8; i += 1) {
+      const output = tutorPrompt.mock({ project, history });
+      expect(tutorPrompt.refine?.(output, { project, history }), output.question).toBeNull();
+      history.push({ role: "tutor", text: output.question }, { role: "trainee", text: "ok" });
+    }
+  });
+
+  it("ask.tutor rejects a reply that writes the aim", () => {
+    const input = { project: null, history: [] };
+    expect(
+      tutorPrompt.refine?.({ question: "Try this: reduce falls from 3.1 to 2.0 by June. Does that work?" }, input),
+    ).toMatch(/aim statement/);
+    expect(tutorPrompt.refine?.({ question: "What number? And by when?" }, input)).toMatch(/exactly one question/);
+  });
+
+  it("ask.devils_advocate, for a weak and a strong record", () => {
+    const weak = projectFacts({
+      title: "Weak",
+      problemStatement: "p",
+      clinicalOwner: null,
+      coachId: null,
+      aim: { text: "Improve things.", baselineValue: null, baselinePeriod: null, target: null, deadline: null, population: null },
+      measures: [],
+      pdsaCycles: [],
+    });
+    const strong = projectFacts({
+      title: "Strong",
+      problemStatement: "p",
+      clinicalOwner: "Dr. Owner",
+      coachId: "c",
+      aim: {
+        text: "Reduce X from 34% to 15% by 30 June 2030.",
+        baselineValue: 34,
+        baselinePeriod: "2024",
+        target: 15,
+        deadline: new Date("2030-06-30"),
+        population: "Adult patients on the ward",
+      },
+      measures: [
+        { name: "o", type: "outcome", dataPoints: 24, definition: { numerator: "n", denominator: "d", dataSource: "EDW", cadence: "monthly" } },
+        { name: "b", type: "balancing", dataPoints: 24, definition: null },
+      ],
+      pdsaCycles: [{ prediction: "Up to about half.", completedAt: new Date() }],
+    });
+    for (const facts of [weak, strong]) {
+      const input = { facts, problemStatement: "p", aimText: "a" };
+      const output = devilsAdvocatePrompt.mock(input);
+      expect(devilsAdvocatePrompt.schema.safeParse(output).success).toBe(true);
+      expect(devilsAdvocatePrompt.refine?.(output, input)).toBeNull();
     }
   });
 });

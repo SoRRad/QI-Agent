@@ -19,7 +19,7 @@ promised:
 
 ## Status
 
-Phases 0 to 2 of 9 are complete.
+Phases 0 to 3 of 9 are complete.
 
 **Phase 0** — scaffold, data model, migrations, seed, the auth seam, the design
 system, the five-destination shell, Docker, and the health endpoint.
@@ -31,6 +31,9 @@ in `docs/VALIDATION.md`.
 **Phase 2** — the PHI scanner, running inside the database client so no write
 can bypass it; the LLM adapter with four providers (mock by default); and the
 numeric guard, under which a model may not write a number at all.
+
+**Phase 3** — the library and its admin; Ask, which answers only from the
+library and verifies every quote it cites; tutor mode; and devil's advocate.
 
 See `PLAN.md` for the build order and the exit criteria for each phase.
 Destination pages carry a dated note naming the phase that builds the feature
@@ -55,13 +58,23 @@ masthead; `chair@example.edu` sees everything.
 ### Verifying
 
 ```bash
-pnpm verify    # typecheck, lint, unit tests, production build
-pnpm e2e       # Playwright smoke tests with axe, at 375px and 1280px
+pnpm test:db:prepare   # once: migrate and seed the separate TEST database
+pnpm verify            # typecheck, lint, unit tests, production build
+pnpm e2e               # Playwright with axe, at 375px and 1280px
 ```
 
 `pnpm verify` is the exit gate for every phase. No phase closes on a partial
-pass. The database-level guarantee tests skip themselves when `DATABASE_URL` is
-unset, so the unit suite runs on a machine with no Postgres — CI must set one.
+pass.
+
+**Tests never touch the development database.** They run against
+`DATABASE_URL_TEST`, and the Playwright suite starts its own server on its own
+port pointed at it. The reason is specific: the audit log is append-only, and
+tests that exercise PHI blocks write to it — against the demo database they
+would leave permanent rows in the audit trail a demo shows.
+`pnpm test:db:prepare` only applies migrations and reseeds; it never drops
+anything, and it refuses any database whose name does not contain "test".
+Suites that need a database skip themselves when none is configured, so the
+unit suite still runs on a machine with no Postgres.
 
 Where a sandbox or CI image ships its own Chromium rather than the revision
 this Playwright version pins, set `PLAYWRIGHT_CHROMIUM_EXECUTABLE` to it

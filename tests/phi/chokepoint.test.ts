@@ -72,7 +72,9 @@ describe("the database client is the only write path", () => {
   it("uses raw SQL only for statements that are visibly SELECTs", () => {
     const violations: string[] = [];
     for (const file of files) {
-      for (const match of file.body.matchAll(/\$queryRaw(?:Unsafe)?\s*(?:<[^>]*>)?\s*\(\s*([`"'])([\s\S]*?)\1/g)) {
+      // Both call form — $queryRawUnsafe("SELECT ...") — and tagged-template
+      // form — $queryRaw`SELECT ...`.
+      for (const match of file.body.matchAll(/\$queryRaw(?:Unsafe)?\s*(?:<[^>]*>)?\s*(?:\(\s*)?([`"'])([\s\S]*?)\1/g)) {
         const statement = (match[2] ?? "").trim();
         if (!/^(select|with)\b/i.test(statement)) violations.push(`${file.path}: ${statement.slice(0, 40)}`);
       }

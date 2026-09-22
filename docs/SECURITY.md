@@ -53,8 +53,17 @@ directly. The demo seed writes through the same guarded client; a seed run that
 completes is proof that the demo data contains no block-tier content.
 
 Free text sent **to a language model** is scanned the same way before it is
-sent (from phase 3 onward): an external model endpoint is not a safer place
-for an identifier than a database.
+sent: an external model endpoint is not a safer place for an identifier than a
+database. An Ask question is scanned as the knowledge-gap record it may become,
+so one acknowledgement covers both the model call and the stored copy of the
+same words; it cannot cover different words. Everything a trainee types to the
+tutor is rescanned on every turn, because the conversation history comes back
+from the browser and is not trusted.
+
+**What Ask keeps.** Ask answers and tutor conversations are not stored. What is
+stored is a question the library could not answer (or could answer only from a
+placeholder), in the knowledge-gap queue the chair reviews, and a count of
+usage.
 
 ### Two tiers
 

@@ -6,3 +6,4 @@ export { PhiAcknowledgementRequiredError, PhiBlockedError, isPhiError } from "./
 export { phiErrorBody, phiErrorResponse } from "./http";
 export type { PhiErrorBody } from "./http";
 export { loadPhiConfig } from "./config";
+export { guardOutbound } from "./outbound";

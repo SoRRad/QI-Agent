@@ -1,7 +1,15 @@
+import "dotenv/config";
 import { defineConfig } from "@playwright/test";
 
-const PORT = process.env["PORT"] ?? "3000";
+/**
+ * The browser suite runs its own server, on its own port, against the TEST
+ * database. It never reuses a development server: flows here trip PHI blocks,
+ * and the audit log they write to is append-only, so running them against the
+ * demo database would leave permanent rows in the audit trail a demo shows.
+ */
+const PORT = process.env["E2E_PORT"] ?? "3100";
 const baseURL = process.env["E2E_BASE_URL"] ?? `http://127.0.0.1:${PORT}`;
+const databaseUrl = process.env["DATABASE_URL_TEST"] ?? process.env["DATABASE_URL"];
 
 /**
  * Where a sandbox or CI image ships its own Chromium rather than the revision
@@ -46,8 +54,12 @@ export default defineConfig({
     ? undefined
     : {
         command: "pnpm start",
-        url: baseURL,
-        reuseExistingServer: !process.env["CI"],
+        url: `${baseURL}/api/health`,
+        reuseExistingServer: false,
         timeout: 120_000,
+        env: {
+          PORT,
+          ...(databaseUrl ? { DATABASE_URL: databaseUrl } : {}),
+        },
       },
 });

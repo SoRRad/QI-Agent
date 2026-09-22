@@ -41,6 +41,117 @@ how the system is demonstrated and tested.
 
 ---
 
+## `ask.answer`
+
+**What it is for.** Answers a question about quality improvement at this
+institution, using only the institutional library.
+
+**What the model is shown.** Every library document, in full, marked by title
+and id, with the three institutional placeholders marked as placeholders. Then
+the question. (While the library is small, the whole library fits in one
+request. When it grows past roughly 120,000 tokens this will switch to
+retrieving the relevant passages; see the README.)
+
+**What it must do.**
+
+- Answer only from those documents. For each document it relies on, give the
+  document's id and a short quote copied **word for word** from it.
+- If the documents do not answer the question, say so, briefly describe what
+  is missing, and name the document the institution should write. It must not
+  answer from general knowledge, even when it knows the answer. This matters
+  most for institutional policy — IRB and QI determination, sign-offs, duty
+  hours — where a plausible general answer can be wrong here.
+- Treat the three placeholders as unwritten policy. It may cite one to explain
+  that the policy has not been written, never as if it were policy.
+- Keep answers to a few sentences.
+
+**How the rules are checked.** In code, after the reply arrives:
+
+- A citation to a document the model was not given is rejected.
+- A quote that does not appear in the cited document is rejected. (Markdown,
+  capitals and spacing are ignored when comparing.)
+
+A rejected reply is retried once with the reason. If the second reply also
+fails, the user is told Ask could not produce an answer grounded in the
+library — and nothing is answered from outside it.
+
+**What the user sees.** The answer, each cited document with its quote and a
+link to read it in full. If an answer cites a placeholder, a banner says the
+policy has not yet been supplied by the institution.
+
+**What is recorded.** Questions the library does not cover go to the chair's
+knowledge gap queue, as do questions whose answer had to lean on a placeholder.
+A question asked again in different words adds to the same gap's count rather
+than creating a new one. Answers themselves are not stored. The question is
+scanned for patient identifiers before it is sent.
+
+---
+
+## `ask.tutor`
+
+**What it is for.** Coaches a trainee through their own project Socratically —
+by asking, not telling.
+
+**What the model is shown.** If the trainee has selected a project: its title,
+problem statement, current aim statement, and the aim check — which of the five
+required elements are present, and why any are missing. (The aim check is
+computed by the system, not by the model.) Then the conversation so far.
+
+**What it must not do.**
+
+- Ask more than one question per reply.
+- Write, draft, suggest or complete an aim statement — even partially, even if
+  the trainee asks for one. The point is that the trainee can write the next
+  one without help.
+
+**How the rules are checked.** A reply must contain exactly one question mark,
+at the end. A reply that reads like an aim statement — a change "from" one
+value "to" another "by" a date — or that offers one ("your aim could be…") is
+rejected, and the model is asked again.
+
+**Order.** When the aim is incomplete, the tutor starts with the most
+fundamental missing element: the number that would show success, then the
+baseline, then who is counted, then the date, then the measure's definition.
+
+**What is recorded.** Each tutor exchange is counted for the usage figures.
+The conversation is not stored. Everything the trainee types is scanned for
+patient identifiers before it is sent.
+
+---
+
+## `ask.devils_advocate`
+
+**What it is for.** Argues, specifically and from the project's own record,
+why a project is likely to fail — and what to do about each risk. Most serious
+first.
+
+**What the model is shown.** The problem statement and aim, and a set of facts
+**computed by the system** from the project record: whether there is a named
+clinical owner, a coach, and outcome, process and balancing measures; whether
+the outcome measure's data source has been identified; how many data points
+exist; how many months remain before the deadline; how many points the measure
+will have by then at its cadence; how many the run chart rules need; how many
+PDSA cycles lack a written prediction; and which aim elements are missing.
+
+**What it must not do.** Write any number, in digits or words. The
+calculations that matter here — "the effect is too small to detect before the
+deadline" — are done by the system; the model refers to them through
+placeholders, under the same check as chart interpretation. It must also stick
+to risks the record supports rather than pad the list.
+
+**The risks it looks for** are the ones that actually end trainee projects:
+the data never arrives; nobody with authority owns the change; the
+intervention cannot be tested at the scale a trainee controls; the effect is
+too small to detect in the time available; there is no balancing measure; the
+aim cannot be succeeded or failed against; cycles run without predictions; the
+change evaporates when the trainee rotates off.
+
+**Where it appears.** On demand in Ask. From phase 5 it also runs
+automatically at intake review, and again when a project is flagged as
+stalled, attached to the stall notification.
+
+---
+
 ## `charts.interpretation`
 
 **What it is for.** Explains in plain language what a run chart or control

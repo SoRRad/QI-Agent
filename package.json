@@ -22,7 +22,8 @@
     "db:reset": "prisma migrate reset --force",
     "e2e": "playwright test",
     "smoke:llm": "tsx scripts/smoke-llm.ts",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "test:db:prepare": "tsx scripts/prepare-test-db.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.128.0",
