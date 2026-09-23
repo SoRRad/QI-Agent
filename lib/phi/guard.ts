@@ -16,9 +16,9 @@ import type { PhiCategory, PhiFlag } from "./types";
  * legitimately hold names; their free-text siblings are scanned normally, and
  * block-tier identifier rules still apply to them.
  *
- * Keyed by field name. tests/phi/guard.test.ts parses prisma/schema.prisma and
- * fails if any of these names appears on a model not listed there, so a new
- * model reusing one of these names forces a deliberate decision.
+ * Keyed by field name, listing the models it applies to: an exemption covers
+ * only those (model, field) pairs. tests/phi/guard.test.ts parses the schema
+ * and fails if a listed pair no longer exists.
  */
 export const NAME_EXEMPT_FIELDS: Readonly<Record<string, readonly string[]>> = {
   // Named in the approved tiering.
@@ -46,6 +46,10 @@ export const NAME_EXEMPT_FIELDS: Readonly<Record<string, readonly string[]>> = {
 export const DATE_EXEMPT_FIELDS: Readonly<Record<string, readonly string[]>> = {
   text: ["AimStatement"],
   baselinePeriod: ["AimStatement"],
+  // The handoff packet's "current state" is generated from the record and
+  // quotes the current aim, deadline included. Its author did not write it,
+  // so asking them to vouch for the aim's dates again would be noise.
+  summary: ["Handoff"],
 };
 
 /** Never scanned: identifiers, not prose. Keys ending in `Id` are skipped too. */
@@ -87,8 +91,10 @@ export function scanWriteData(model: string, data: unknown, tiers: ScanTiers = "
   const flags: FieldFlag[] = [];
   walk(data, null, [], (text, field, path) => {
     const exemptCategories: PhiCategory[] = [];
-    if (field in NAME_EXEMPT_FIELDS) exemptCategories.push("name");
-    if (field in DATE_EXEMPT_FIELDS) exemptCategories.push("date");
+    // Exemptions are per model: `text` is exempt from date patterns on an
+    // aim statement, not on every model that happens to have a `text` field.
+    if (NAME_EXEMPT_FIELDS[field]?.includes(model)) exemptCategories.push("name");
+    if (DATE_EXEMPT_FIELDS[field]?.includes(model)) exemptCategories.push("date");
 
     for (const flag of scan(text, { exemptCategories })) {
       if (tiers === "block_only" && flag.tier !== "block") continue;

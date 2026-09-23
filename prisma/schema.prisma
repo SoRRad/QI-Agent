@@ -64,6 +64,12 @@ enum Cadence {
   annual
 }
 
+enum DriverKind {
+  primary
+  secondary
+  change
+}
+
 enum ActDecision {
   adopt
   adapt
@@ -154,6 +160,7 @@ model User {
   program Program? @relation(fields: [programId], references: [id], onDelete: SetNull)
 
   coachedProjects     Project[]             @relation("ProjectCoach")
+  ownedProjects       Project[]             @relation("ProjectOwner")
   authoredAims        AimStatement[]        @relation("AimAuthor")
   enteredDataPoints   DataPoint[]           @relation("DataPointEnteredBy")
   createdDefinitions  MeasureDefinition[]   @relation("DefinitionAuthor")
@@ -181,6 +188,9 @@ model Project {
   problemStatement        String
   status                  ProjectStatus @default(draft)
   programId               String
+  // The trainee who leads the project now. Handoff moves it; stall notices
+  // and the handoff packet go to this person.
+  ownerId                 String?
   // Structured staff-name fields. Exempt from PHI name patterns (Q7) because
   // they legitimately hold names; their free-text siblings are scanned.
   clinicalOwner           String?
@@ -200,11 +210,18 @@ model Project {
   // Stall detection (§6.2): recomputed by the nightly job, never by hand.
   lastActivityAt          DateTime      @default(now())
   stalledAt               DateTime?
+  // Why the stall job flagged it, in plain language, for the stalled queue.
+  stallReason             String?
+  // Cross-cohort learning (§6.2 duplicate detection): what the project
+  // achieved and why it ended. Set at completion or archival.
+  outcomeSummary          String?
+  endReason               String?
   createdAt               DateTime      @default(now())
   updatedAt               DateTime      @updatedAt
 
   program Program @relation(fields: [programId], references: [id], onDelete: Restrict)
   coach   User?   @relation("ProjectCoach", fields: [coachId], references: [id], onDelete: SetNull)
+  owner   User?   @relation("ProjectOwner", fields: [ownerId], references: [id], onDelete: SetNull)
 
   aimStatements       AimStatement[]
   measures            Measure[]
@@ -213,8 +230,10 @@ model Project {
   submissions         Submission[]
   milestoneMaps       MilestoneMap[]
   sustainabilityPlan  SustainabilityPlan?
+  driverNodes         DriverNode[]
 
   @@index([programId, status])
+  @@index([ownerId])
   @@index([status])
   @@index([clerDomain])
   @@index([cohortYear])
@@ -225,6 +244,27 @@ model Project {
   // `hard_guarantees` migration.
   @@index([title(ops: raw("gin_trgm_ops"))], type: Gin, map: "project_title_trgm_idx")
   @@index([problemStatement(ops: raw("gin_trgm_ops"))], type: Gin, map: "project_problem_statement_trgm_idx")
+}
+
+// A driver diagram node: aim → primary drivers → secondary drivers → change
+// ideas (§6.2). The aim itself is the project's current AimStatement, so the
+// tree's roots are primary drivers.
+model DriverNode {
+  id        String     @id @default(cuid())
+  projectId String
+  parentId  String?
+  kind      DriverKind
+  text      String
+  position  Int        @default(0)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  project  Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  parent   DriverNode?  @relation("DriverTree", fields: [parentId], references: [id], onDelete: Cascade)
+  children DriverNode[] @relation("DriverTree")
+
+  @@index([projectId])
+  @@index([parentId])
 }
 
 // Append-only. The current aim is the highest version for a project.

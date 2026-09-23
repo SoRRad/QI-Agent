@@ -3,6 +3,7 @@ import { chartInterpretationPrompt } from "./chartInterpretation";
 import { dataRequestPrompt } from "./dataRequest";
 import { definitionRestatementPrompt } from "./definitionRestatement";
 import { devilsAdvocatePrompt } from "./devilsAdvocate";
+import { duplicateRerankPrompt } from "./duplicateRerank";
 import { tutorPrompt } from "./tutor";
 import type { PromptDefinition } from "./types";
 
@@ -19,6 +20,8 @@ export type { RestatementInput, RestatementOutput } from "./definitionRestatemen
 export { dataRequestPrompt, dataRequestSource } from "./dataRequest";
 export type { DataRequestInput, DataRequestOutput } from "./dataRequest";
 export type { DevilsAdvocateInput, DevilsAdvocateOutput } from "./devilsAdvocate";
+export { duplicateRerankPrompt, rerankSource } from "./duplicateRerank";
+export type { RerankCandidate, RerankInput, RerankOutput } from "./duplicateRerank";
 
 /**
  * Every prompt in the system. docs/PROMPTS.md must have a section for each id
@@ -32,4 +35,5 @@ export const ALL_PROMPTS: ReadonlyArray<PromptDefinition<never, unknown>> = [
   chartInterpretationPrompt as PromptDefinition<never, unknown>,
   definitionRestatementPrompt as PromptDefinition<never, unknown>,
   dataRequestPrompt as PromptDefinition<never, unknown>,
+  duplicateRerankPrompt as PromptDefinition<never, unknown>,
 ];

@@ -124,10 +124,11 @@ describe("fingerprints", () => {
 });
 
 /**
- * Exemptions are keyed by field NAME. That is only safe while each exempt
- * name means the same thing everywhere it appears, so this test parses the
- * schema and fails if a model not listed here gains a field with an exempt
- * name. A failure is a prompt for a decision, not something to paper over.
+ * Exemptions are keyed by (model, field). Until phase 5 they were keyed by
+ * field name alone, with this test forbidding any other model from reusing an
+ * exempt name; DriverNode.text tripped it, and scoping by model replaced the
+ * rule. The schema is still parsed so that an exemption naming a field that
+ * no longer exists fails loudly.
  */
 describe("exempt field names match the schema", () => {
   const schema = readFileSync(join(process.cwd(), "prisma", "schema.prisma"), "utf8");
@@ -145,9 +146,20 @@ describe("exempt field names match the schema", () => {
   const modelsWith = (field: string) =>
     [...models.entries()].filter(([, fields]) => fields.has(field)).map(([model]) => model).sort();
 
-  for (const [field, expected] of Object.entries({ ...NAME_EXEMPT_FIELDS, ...DATE_EXEMPT_FIELDS })) {
-    it(`"${field}" appears only on ${expected.join(", ")}`, () => {
-      expect(modelsWith(field)).toEqual([...expected].sort());
+  // Exemptions apply per (model, field), so another model reusing a field
+  // name does not inherit one. What must hold is that every listed pair is
+  // real: an exemption naming a field that no longer exists is dead policy.
+  for (const [field, listed] of [...Object.entries(NAME_EXEMPT_FIELDS), ...Object.entries(DATE_EXEMPT_FIELDS)]) {
+    it(`"${field}" exists on ${listed.join(", ")}`, () => {
+      for (const model of listed) expect(modelsWith(field), `${model}.${field}`).toContain(model);
     });
   }
+
+  it("scopes an exemption to its model, not to the field name", () => {
+    // Regression: `text` was date-exempt on every model with a `text` field.
+    const aim = scanWriteData("AimStatement", { text: "Reduce X by 30 June 2027." });
+    const driver = scanWriteData("DriverNode", { text: "Discuss at the huddle on 30 June 2027." });
+    expect(aim.filter((f) => f.category === "date")).toEqual([]);
+    expect(driver.some((f) => f.category === "date")).toBe(true);
+  });
 });

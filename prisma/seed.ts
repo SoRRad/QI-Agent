@@ -170,6 +170,7 @@ async function main(): Promise<void> {
         "Discharge summaries on the Hospitalist service are frequently signed days after the patient leaves, so the receiving primary care clinician has no document at the first post-discharge visit. Chart review of the last quarter found roughly a third of summaries signed beyond 48 hours, concentrated in weekend discharges.",
       status: "active",
       programId: medicine.id,
+      ownerId: traineeMed1.id,
       clinicalOwner: "Dr. H. Vasquez, Hospitalist Medical Director",
       coachId: coachMed.id,
       sponsor: "Dr. A. Okonkwo, Program Director",
@@ -356,6 +357,22 @@ async function main(): Promise<void> {
     },
   });
 
+  // Driver diagram: aim → primary drivers → secondary drivers → change ideas.
+  const driver = (kind: "primary" | "secondary" | "change", text: string, position: number, parentId: string | null = null) =>
+    db.driverNode.create({ data: { projectId: discharge.id, kind, text, position, parentId } });
+  const d1 = await driver("primary", "The summary is drafted while the team still knows the patient", 0);
+  const d1a = await driver("secondary", "Drafting happens before the patient physically leaves", 0, d1.id);
+  await driver("change", "Draft the summary in the existing 14:00 discharge huddle", 0, d1a.id);
+  await driver("change", "Pre-populate the hospital course from daily progress notes", 1, d1a.id);
+  const d1b = await driver("secondary", "The admitting resident, not cross-cover, owns the draft", 1, d1.id);
+  await driver("change", "Name the drafting resident on the team list each morning", 0, d1b.id);
+  const d2 = await driver("primary", "Weekend discharges are covered by someone who can write the summary", 1);
+  const d2a = await driver("secondary", "Cross-cover has the hospital course at hand", 0, d2.id);
+  await driver("change", "Structured weekend cross-cover template", 0, d2a.id);
+  const d3 = await driver("primary", "Unsigned summaries are visible before they are late", 2);
+  const d3a = await driver("secondary", "A daily list of unsigned summaries reaches the team", 0, d3.id);
+  await driver("change", "Add unsigned summaries to the morning huddle board", 0, d3a.id);
+
   await db.pdsaCycle.create({
     data: {
       projectId: discharge.id,
@@ -433,6 +450,10 @@ async function main(): Promise<void> {
         "Daily complete blood counts and metabolic panels were ordered as recurring standing orders on the general surgery ward regardless of clinical trajectory, producing avoidable phlebotomy, hospital-acquired anaemia risk and cost, and waking stable patients before 05:00.",
       status: "complete",
       programId: surgery.id,
+      ownerId: traineeSurg.id,
+      outcomeSummary:
+        "Routine draws fell from 2.3 to 1.5 per patient-day and stayed there for two quarters after the order set change. No harm from delayed electrolyte detection on chart review.",
+      endReason: "Completed. The order set change is permanent and the measure continues quarterly under the ward director.",
       clinicalOwner: "Dr. L. Marchetti, Surgical Ward Director",
       coachId: coachSurg.id,
       sponsor: "Dr. M. Baptiste, Program Director",
@@ -565,6 +586,8 @@ async function main(): Promise<void> {
         "Patients meeting sepsis criteria on the medical wards wait a median of 94 minutes for a first antibiotic dose, against an internal target of 60. The delay appears to sit between recognition and the order being placed rather than between order and administration.",
       status: "stalled",
       programId: medicine.id,
+      ownerId: traineeMed2.id,
+      stallReason: "No PDSA entry or data point in 60 days.",
       clinicalOwner: "Dr. C. Ibrahim, Sepsis Committee Chair",
       coachId: coachMed.id,
       sponsor: "Dr. A. Okonkwo, Program Director",
@@ -637,6 +660,47 @@ async function main(): Promise<void> {
     },
   });
 
+  // ============================================================= PROJECT 5
+  // Archived, from an earlier cohort. It exists so duplicate detection has a
+  // real precedent to surface when someone proposes a handoff project again:
+  // cross-cohort learning is the point (§6.2).
+  const priorHandoff = await db.project.create({
+    data: {
+      title: "Standardised evening handoff using I-PASS on the medicine wards",
+      problemStatement:
+        "Evening handoffs between day and night residents on the medicine wards were unstructured, and the night team regularly re-derived plans that the day team had already made. Near-miss reports cited handoff omissions.",
+      status: "archived",
+      programId: medicine.id,
+      clinicalOwner: "Dr. H. Vasquez, Hospitalist Medical Director",
+      coachId: coachMed.id,
+      cohortYear: 2023,
+      clerDomain: "care_transitions",
+      approvedAt: daysAgo(1100),
+      completedAt: daysAgo(900),
+      archivedAt: daysAgo(880),
+      lastActivityAt: daysAgo(900),
+      outcomeSummary:
+        "Template use rose from about a fifth of handoffs to about two thirds on two wards within three months, then drifted back once the lead resident graduated.",
+      endReason:
+        "Ended when the resident lead graduated without a handoff; nobody owned the audit, so adherence was never measured again. The template itself still exists in the EHR.",
+    },
+  });
+  await db.aimStatement.create({
+    data: {
+      projectId: priorHandoff.id,
+      version: 1,
+      text: "Increase the proportion of evening handoffs on the medicine wards at University Hospital that use every I-PASS element from 20% (baseline, September 2023) to 80% by 31 March 2024.",
+      baselineValue: 20,
+      baselineUnit: "%",
+      baselinePeriod: "September 2023",
+      target: 80,
+      targetUnit: "%",
+      deadline: new Date("2024-03-31T00:00:00Z"),
+      population: "Resident-to-resident evening handoffs on the medicine wards",
+      createdAt: daysAgo(1100),
+    },
+  });
+
   // ============================================================= PROJECT 4
   // Deliberately bad (addition C6). Vague aim, no balancing measure, no
   // clinical owner. This is the thirty-second demo of intake blocking.
@@ -646,6 +710,7 @@ async function main(): Promise<void> {
       problemStatement: "Handoffs are inconsistent and we think patient safety could be better.",
       status: "draft",
       programId: medicine.id,
+      ownerId: traineeMed2.id,
       // No clinicalOwner: intake must block submission and say why.
       coachId: null,
       cohortYear: 2026,
@@ -842,7 +907,7 @@ async function main(): Promise<void> {
       `  library docs        ${docs.length} (${localCount} isLocal placeholders requiring institutional content)`,
       `  programs            2`,
       `  users               6 (1 chair, 2 coaches, 3 trainees)`,
-      `  projects            4 (active, complete, stalled, and one deliberately bad draft)`,
+      `  projects            5 (active, complete, stalled, archived, and one deliberately bad draft)`,
       `  library measures    2 (one superseded, to exercise the deprecation banner)`,
       `  data points         ${DISCHARGE_SERIES.length + LAB_SERIES.length + READMISSION_SERIES.length}`,
       `  pulse responses     ${pulse.length} across 3 CLER domains`,

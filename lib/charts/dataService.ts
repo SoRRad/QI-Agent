@@ -1,6 +1,7 @@
 import { audit } from "@/lib/audit";
 import { db } from "@/lib/db";
 import type { User } from "@/lib/generated/prisma/client";
+import { touchActivity } from "@/lib/projects/service";
 import { recordUsage } from "@/lib/usage";
 import { importRows, type Cells, type ImportRow } from "./importRows";
 import { MeasureAccessError, requireMeasureEdit } from "./service";
@@ -62,6 +63,8 @@ export async function addPoints(user: User, measureId: string, cells: readonly C
     entityId: measureId,
     metadata: { count: rows.length, firstPeriodIndex: start },
   });
+  // A data point is project activity: it resets the stall clock (§6.2).
+  if (measure.project) await touchActivity(measure.project.id, user.id);
   if (points.length === 0) {
     await recordUsage("chart_created", { id: user.id, role: user.role, programId: user.programId }, { entityId: measureId });
   }

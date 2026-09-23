@@ -254,3 +254,34 @@ the analyst should confirm first.
 **What happens if it breaks a rule.** Rejected and retried once with the
 reason; if the retry fails, the request is shown as unavailable. Nothing is
 stored: the request is a document the resident copies or downloads.
+
+---
+
+## `projects.duplicate_rerank`
+
+**What it is for.** Duplicate detection at intake: "has anyone already tried
+this?" Trigram search over every project's title and problem statement — every
+program, every year, archived projects included — finds candidates that share
+words (ADR-0003). This prompt decides which of them are genuinely the same
+problem, and says in one sentence what overlaps, so the new team knows why to
+read it.
+
+**What the model is shown.** The new project's title and problem statement,
+and each candidate's title, problem statement, program, cohort year and status.
+
+**What the model is not shown, and never says.** How a candidate turned out.
+What it achieved and why it ended are displayed beside the model's sentence,
+verbatim from the project's own record, so a trainee reads what actually
+happened rather than a paraphrase of it.
+
+**What it must not do.**
+
+- Return a key that was not in the list, or the same project twice.
+- Describe an outcome ("succeeded", "was abandoned", "ended").
+- Introduce a number that is not in what it was given.
+
+**What happens if it breaks a rule.** Rejected and retried once with the
+reason. If the retry fails, or the provider is unavailable, the page still
+shows the top three recall candidates, labelled as not checked for relevance:
+the committee would rather a trainee see a possibly related project than
+nothing.

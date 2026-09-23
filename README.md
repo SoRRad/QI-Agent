@@ -19,7 +19,7 @@ promised:
 
 ## Status
 
-Phases 0 to 3 of 9 are complete.
+Phases 0 to 5 of 9 are complete.
 
 **Phase 0** — scaffold, data model, migrations, seed, the auth seam, the design
 system, the five-destination shell, Docker, and the health endpoint.
@@ -34,6 +34,15 @@ numeric guard, under which a model may not write a number at all.
 
 **Phase 3** — the library and its admin; Ask, which answers only from the
 library and verifies every quote it cites; tutor mode; and devil's advocate.
+
+**Phase 4** — the SPC studio: run and control charts drawn from `lib/spc`,
+frozen baselines, the chart-type advisor, the definition builder with its
+reproducibility check, data requests, and CSV upload that never sends the file.
+
+**Phase 5** — projects: the registry, the intake wizard that blocks with an
+explanation, duplicate detection against every cohort, the workspace (aim,
+driver diagram, measures, PDSA log, handoff), the stall job and the
+committee's stalled queue. Decisions are in `docs/ADR/0011-projects-workspace.md`.
 
 See `PLAN.md` for the build order and the exit criteria for each phase.
 Destination pages carry a dated note naming the phase that builds the feature

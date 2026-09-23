@@ -146,11 +146,16 @@ and `reviewer`.
 `baselinePeriod`. The aim statement standard *requires* a calendar deadline and
 a baseline period, so without this exemption every valid aim would raise a
 warning, and a warning that fires on every aim teaches people to click through
-warnings. A date of birth after "DOB" in an aim is still blocked.
+warnings. A date of birth after "DOB" in an aim is still blocked. Also the
+handoff packet's generated `summary` (phase 5): it quotes the current aim, and
+its author did not write it.
 
-Exemptions are keyed by field name. A test parses the schema and fails if any
-exempt name appears on a model not listed above, so a new model reusing one of
-these names forces a decision rather than silently inheriting the exemption.
+Exemptions are keyed by model *and* field: `AimStatement.text` is exempt,
+`DriverNode.text` is not. (Until phase 5 they were keyed by field name alone,
+with a test forbidding any other model from reusing an exempt name; the driver
+diagram's `text` field tripped that test, and scoping by model replaced the
+rule.) A test still parses the schema and fails if an exemption names a field
+that no longer exists.
 
 ### Extending the patterns without a deploy
 
@@ -188,14 +193,21 @@ this page changes with it.
 ### Readable across all programs
 
 Project title, problem statement, aim statement, measure definitions, status,
-outcome, sustainability plan, and archived project records. Barrier themes,
+outcome, sustainability plan, and archived project records — including, from
+phase 5, what a project achieved and why it ended (`outcomeSummary`,
+`endReason`), which duplicate detection shows to every later team on the same
+problem, and who leads and coaches it. Barrier themes,
 their paraphrased summaries, decisions and what changed. The library. Events.
 
 ### Restricted to the owning program, the assigned coach, and the chair
 
 Data points, PDSA cycle contents, handoff packets, milestone maps,
 symposium submissions, and any free text a trainee wrote about obstacles. The
-project's clinical owner, sponsor and analyst contact.
+project's clinical owner, sponsor and analyst contact. From phase 5: the driver
+diagram, the equity stratification plan, and why the stall job flagged a
+project. (The equity plan was previously unlisted, so chair-only by default;
+making it readable by its own program was a deliberate choice, recorded here
+for the committee to review.)
 
 An assigned coach reads a project's restricted material wherever they sit; a
 coach with no assignment to it does not, even in the same program.
