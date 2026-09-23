@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useRef, useState, type ReactNode } from "react";
+import { startTransition, useActionState, useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import type { FormState } from "@/app/projects/actions";
 import { PhiNotice } from "@/components/phi/PhiNotice";
@@ -13,6 +13,11 @@ import { Banner, Button, cx } from "@/components/ui/primitives";
  * user's own words.
  *
  * Inputs are uncontrolled children, so a failed save keeps what was typed.
+ * React resets a `<form action>` after every action, success or not; that
+ * would wipe a half-completed survey because the PHI guard objected to one
+ * sentence. So with JavaScript the submit is dispatched by hand and the form
+ * is reset only after a success. Without JavaScript the native form post
+ * still reaches the same server action.
  */
 export function ActionForm({
   action,
@@ -45,14 +50,20 @@ export function ActionForm({
   const [state, formAction, pending] = useActionState<FormState, FormData>(action, { status: "idle" });
   const [submitted, setSubmitted] = useState<Record<string, string>>({});
   const form = useRef<HTMLFormElement>(null);
+  useEffect(() => {
+    if (state.status === "done") form.current?.reset();
+  }, [state]);
 
   return (
     <form
       ref={form}
       action={formAction}
-      onSubmit={() => {
-        const data = new FormData(form.current ?? undefined);
+      onSubmit={(event) => {
+        event.preventDefault();
+        const submitter = (event.nativeEvent as SubmitEvent).submitter;
+        const data = new FormData(event.currentTarget, submitter instanceof HTMLElement ? submitter : null);
         setSubmitted(Object.fromEntries(phiFields.map(([name]) => [name, String(data.get(name) ?? "")])));
+        startTransition(() => formAction(data));
       }}
       className={cx("flex flex-col gap-4", className)}
     >

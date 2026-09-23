@@ -19,7 +19,7 @@ promised:
 
 ## Status
 
-Phases 0 to 5 of 9 are complete.
+Phases 0 to 6 of 9 are complete.
 
 **Phase 0** — scaffold, data model, migrations, seed, the auth seam, the design
 system, the five-destination shell, Docker, and the health endpoint.
@@ -43,6 +43,13 @@ reproducibility check, data requests, and CSV upload that never sends the file.
 explanation, duplicate detection against every cohort, the workspace (aim,
 driver diagram, measures, PDSA log, handoff), the stall job and the
 committee's stalled queue. Decisions are in `docs/ADR/0011-projects-workspace.md`.
+
+**Phase 6** — Pulse: the quarterly survey the chair composes, anonymous unless
+the respondent chooses otherwise; "My responses" from a receipt only the
+respondent's browser holds; response rate by program; theming into
+paraphrased themes; the barrier lifecycle; and the "You reported, we changed"
+digest, drafted from closed barriers only. Decisions are in
+`docs/ADR/0012-pulse.md`.
 
 See `PLAN.md` for the build order and the exit criteria for each phase.
 Destination pages carry a dated note naming the phase that builds the feature
@@ -76,8 +83,10 @@ pnpm e2e               # Playwright with axe, at 375px and 1280px
 pass.
 
 **Tests never touch the development database.** They run against
-`DATABASE_URL_TEST`, and the Playwright suite starts its own server on its own
-port pointed at it. The reason is specific: the audit log is append-only, and
+`DATABASE_URL_TEST`, and the Playwright suite starts its own servers on their
+own ports pointed at it: one as the chair (3100) and one as a trainee (3101),
+since production ignores the dev role switcher. It reseeds the test database
+before it starts, so flows that change state begin from the same demo. The reason is specific: the audit log is append-only, and
 tests that exercise PHI blocks write to it — against the demo database they
 would leave permanent rows in the audit trail a demo shows.
 `pnpm test:db:prepare` only applies migrations and reseeds; it never drops

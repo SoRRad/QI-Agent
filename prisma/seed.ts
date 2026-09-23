@@ -14,6 +14,7 @@ import "dotenv/config";
 import { createDb } from "@/lib/db";
 import { loadLibraryDocs } from "@/lib/content";
 import { runWithContext } from "@/lib/request-context";
+import { DEFAULT_INSTRUMENT } from "@/lib/pulse/instrument";
 import { DISCHARGE_SERIES, LAB_SERIES, READMISSION_SERIES } from "./demo-data";
 
 // The seed writes through the SAME guarded client as the application. It runs
@@ -36,8 +37,13 @@ async function clear(): Promise<void> {
   await db.knowledgeGap.deleteMany();
   await db.libraryDoc.deleteMany();
   await db.$executeRawUnsafe(`DELETE FROM "_BarrierPulseResponses"`).catch(() => undefined);
+  await db.pulseDigest.deleteMany();
   await db.barrier.deleteMany();
+  await db.pulseAnswer.deleteMany();
   await db.pulseResponse.deleteMany();
+  await db.pulseParticipation.deleteMany();
+  await db.pulseQuestion.deleteMany();
+  await db.pulseSurvey.deleteMany();
   await db.sustainabilityPlan.deleteMany();
   await db.handoff.deleteMany();
   await db.pdsaCycle.deleteMany();
@@ -99,6 +105,27 @@ async function main(): Promise<void> {
   const traineeMed1 = await user({ email: "resident1.medicine@example.edu", name: "Dr. J. Oyelaran", role: "trainee", programId: medicine.id });
   const traineeMed2 = await user({ email: "resident2.medicine@example.edu", name: "Dr. P. Whitfield", role: "trainee", programId: medicine.id });
   const traineeSurg = await user({ email: "resident1.surgery@example.edu", name: "Dr. K. Aluko", role: "trainee", programId: surgery.id });
+
+  // The rest of each program's trainees. They exist so the pulse response
+  // rate has a real denominator: with SSO every resident is a user, whether or
+  // not they ever open a project.
+  const roster = async (names: readonly string[], slug: string, programId: string) => {
+    const users = [];
+    for (const [i, name] of names.entries()) {
+      users.push(await user({ email: `trainee${String(i + 3).padStart(2, "0")}.${slug}@example.edu`, name, role: "trainee", programId }));
+    }
+    return users;
+  };
+  const rosterMed = await roster(
+    ["Dr. A. Mensah", "Dr. L. Castillo", "Dr. H. Novak", "Dr. R. Iyer", "Dr. C. Okafor", "Dr. M. Haddad", "Dr. E. Lindgren", "Dr. S. Tanaka", "Dr. B. Moreau", "Dr. D. Kowalski", "Dr. F. Osei", "Dr. G. Rahman"],
+    "medicine",
+    medicine.id,
+  );
+  const rosterSurg = await roster(
+    ["Dr. N. Petrov", "Dr. O. Delgado", "Dr. V. Achebe", "Dr. W. Brennan", "Dr. Y. Sato", "Dr. Z. Farouk", "Dr. I. Magnusson", "Dr. U. Ferreira"],
+    "surgery",
+    surgery.id,
+  );
 
   // ------------------------------------------------- library (shared) measure
   // A superseded pair, so the deprecation banner (addition C3) is visible in
@@ -751,38 +778,77 @@ async function main(): Promise<void> {
   });
 
   // ------------------------------------------------------------------ pulse
+  // The current quarter's survey is open: the default instrument (§6.4) plus
+  // one question of the chair's own. Twelve responses across three CLER
+  // domains (§8). Participation records who responded; the responses do not.
   const quarter = "2026-Q3";
+  const survey = await db.pulseSurvey.create({
+    data: {
+      quarter,
+      status: "open",
+      openedAt: daysAgo(80),
+      intro: "Five minutes, once a quarter. The committee reads themes drawn from these answers, never the answers themselves, and reports back what changed.",
+      questions: {
+        create: [
+          ...DEFAULT_INSTRUMENT.map((q, i) => ({ ...q, position: i })),
+          {
+            position: DEFAULT_INSTRUMENT.length,
+            kind: "single_choice" as const,
+            core: null,
+            prompt: "How much protected time did you have for improvement work this quarter?",
+            help: null,
+            required: false,
+            options: ["None", "Less than half a day a month", "Half a day to a day a month", "More than a day a month"],
+          },
+        ],
+      },
+    },
+    include: { questions: true },
+  });
+  const protectedTime = survey.questions.find((q) => q.core === null)!;
+
   const pulse: ReadonlyArray<{
     confidence: number;
     domain: "patient_safety" | "care_transitions" | "supervision";
     barrier: string;
-    name?: string;
+    /** Set only when the respondent chose to be identified. */
+    respondent?: { id: string; name: string };
+    /** Set only when the respondent chose to share their program. */
     programId?: string;
+    /** Who responded, for the participation record. */
+    by: { id: string };
+    time?: string;
   }> = [
-    { confidence: 2, domain: "care_transitions", barrier: "I could not get the data I needed. I asked for a report in March and still do not have it in September.", name: "Dr. J. Oyelaran", programId: medicine.id },
-    { confidence: 1, domain: "care_transitions", barrier: "Nobody told me who the analyst was. I emailed three people and gave up.", programId: medicine.id },
-    { confidence: 2, domain: "care_transitions", barrier: "The data request took so long that the resident who started the project had rotated off before it arrived.", programId: surgery.id },
-    { confidence: 3, domain: "patient_safety", barrier: "My project needed an order set change and I never found out who approves those.", programId: medicine.id },
-    { confidence: 2, domain: "patient_safety", barrier: "We were told to do a QI project but not given protected time, so it happened on days off or not at all.", name: "Dr. K. Aluko", programId: surgery.id },
-    { confidence: 1, domain: "patient_safety", barrier: "No protected time. Realistically this competes with sleep after nights.", programId: surgery.id },
-    { confidence: 4, domain: "supervision", barrier: "My coach was excellent but I only met them twice because of scheduling.", programId: medicine.id },
-    { confidence: 3, domain: "supervision", barrier: "I was assigned a coach outside my specialty who did not know the clinical context, so most meetings were spent explaining it.", programId: surgery.id },
-    { confidence: 2, domain: "supervision", barrier: "I did not know I was allowed to ask for a different coach.", programId: medicine.id },
-    { confidence: 4, domain: "care_transitions", barrier: "The handoff project template from last year was genuinely useful. More of that.", name: "Dr. P. Whitfield", programId: medicine.id },
-    { confidence: 5, domain: "patient_safety", barrier: "Having a statistician look at our run chart before the symposium changed how we presented it.", programId: medicine.id },
-    { confidence: 3, domain: "supervision", barrier: "Feedback on the abstract came after the submission deadline had passed.", programId: surgery.id },
+    { confidence: 2, domain: "care_transitions", barrier: "I could not get the data I needed. I asked for a report in March and still do not have it in September.", respondent: traineeMed1, programId: medicine.id, by: traineeMed1, time: "None" },
+    { confidence: 1, domain: "care_transitions", barrier: "Nobody told me who the analyst was. I emailed three people and gave up.", programId: medicine.id, by: rosterMed[0]!, time: "None" },
+    { confidence: 2, domain: "care_transitions", barrier: "The data request took so long that the resident who started the project had rotated off before it arrived.", programId: surgery.id, by: rosterSurg[0]! },
+    { confidence: 3, domain: "patient_safety", barrier: "My project needed an order set change and I never found out who approves those.", by: rosterMed[1]!, time: "Less than half a day a month" },
+    { confidence: 2, domain: "patient_safety", barrier: "We were told to do a QI project but not given protected time, so it happened on days off or not at all.", respondent: traineeSurg, programId: surgery.id, by: traineeSurg, time: "None" },
+    { confidence: 1, domain: "patient_safety", barrier: "No protected time. Realistically this competes with sleep after nights.", by: rosterSurg[1]!, time: "None" },
+    { confidence: 4, domain: "supervision", barrier: "My coach was excellent but I only met them twice because of scheduling.", programId: medicine.id, by: rosterMed[2]!, time: "Half a day to a day a month" },
+    { confidence: 3, domain: "supervision", barrier: "I was assigned a coach outside my specialty who did not know the clinical context, so most meetings were spent explaining it.", programId: surgery.id, by: rosterSurg[2]! },
+    { confidence: 2, domain: "supervision", barrier: "I did not know I was allowed to ask for a different coach.", by: rosterMed[3]!, time: "Less than half a day a month" },
+    { confidence: 4, domain: "care_transitions", barrier: "The handoff project template from last year was genuinely useful. More of that.", programId: medicine.id, by: rosterMed[4]! },
+    { confidence: 5, domain: "patient_safety", barrier: "Having a statistician look at our run chart before the symposium changed how we presented it.", programId: medicine.id, by: rosterMed[5]!, time: "More than a day a month" },
+    { confidence: 3, domain: "supervision", barrier: "Feedback on the abstract came after the submission deadline had passed.", by: rosterSurg[3]!, time: "Less than half a day a month" },
   ];
   const createdPulse = [];
-  for (const row of pulse) {
+  for (const [i, row] of pulse.entries()) {
+    await db.pulseParticipation.create({ data: { surveyId: survey.id, userId: row.by.id } });
     createdPulse.push(
       await db.pulseResponse.create({
         data: {
+          surveyId: survey.id,
           quarter,
           confidence: row.confidence,
           clerDomain: row.domain,
           barrierText: row.barrier,
-          respondentName: row.name ?? null,
+          respondentName: row.respondent?.name ?? null,
+          respondentUserId: row.respondent?.id ?? null,
           programId: row.programId ?? null,
+          // Spread over the quarter, so the demo does not show one busy day.
+          submittedOn: daysAgo(75 - i * 5),
+          ...(row.time ? { answers: { create: [{ questionId: protectedTime.id, text: row.time }] } } : {}),
         },
       }),
     );
@@ -805,10 +871,10 @@ async function main(): Promise<void> {
         "GMEC approved a named Decision Support liaison for GME quality improvement, with a standing two-week turnaround commitment for trainee data requests.",
       whatChanged:
         "There is now one named analyst liaison for trainee QI data requests, and requests are logged with a two-week turnaround commitment rather than routed ad hoc by email.",
-      raisedAt: daysAgo(210),
-      atGmecAt: daysAgo(150),
-      decidedAt: daysAgo(100),
-      closedAt: daysAgo(80),
+      raisedAt: daysAgo(62),
+      atGmecAt: daysAgo(50),
+      decidedAt: daysAgo(38),
+      closedAt: daysAgo(21),
       pulseResponses: { connect: createdPulse.slice(0, 3).map((p) => ({ id: p.id })) },
     },
   });
@@ -822,7 +888,7 @@ async function main(): Promise<void> {
       escalationTarget: "gmec",
       ownerId: chair.id,
       quarter,
-      raisedAt: daysAgo(60),
+      raisedAt: daysAgo(45),
       atGmecAt: daysAgo(20),
       pulseResponses: { connect: createdPulse.slice(4, 6).map((p) => ({ id: p.id })) },
     },
@@ -906,11 +972,12 @@ async function main(): Promise<void> {
       "seeded:",
       `  library docs        ${docs.length} (${localCount} isLocal placeholders requiring institutional content)`,
       `  programs            2`,
-      `  users               6 (1 chair, 2 coaches, 3 trainees)`,
+      `  users               ${6 + rosterMed.length + rosterSurg.length} (1 chair, 2 coaches, 3 named trainees, ${rosterMed.length + rosterSurg.length} roster trainees)`,
       `  projects            5 (active, complete, stalled, archived, and one deliberately bad draft)`,
       `  library measures    2 (one superseded, to exercise the deprecation banner)`,
       `  data points         ${DISCHARGE_SERIES.length + LAB_SERIES.length + READMISSION_SERIES.length}`,
-      `  pulse responses     ${pulse.length} across 3 CLER domains`,
+      `  pulse survey        ${quarter}, open, default instrument + 1 chair question`,
+      `  pulse responses     ${pulse.length} across 3 CLER domains (${pulse.length - 8} not yet in a barrier)`,
       `  barriers            3 (raised, at_gmec, closed)`,
       `  knowledge gaps      2`,
       "",

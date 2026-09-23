@@ -46,7 +46,8 @@ The scanner walks **every** string in a write — top-level fields, nested
 relation writes, updates, array elements, JSON — and scans it. The default is
 to scan: a field added to the schema later is covered without anyone
 remembering to register it. Only identifiers (record ids, foreign keys, email,
-slug) are skipped.
+slug) and hex digests (fields ending in `Hash`, such as a pulse receipt, which
+contain long digit runs by chance) are skipped.
 
 It is not a client-side convenience and cannot be bypassed by calling the API
 directly. The demo seed writes through the same guarded client; a seed run that
@@ -108,7 +109,11 @@ the specific flags are written to the audit log. Warned:
 
 For a block: that it occurred, the user, the model and field, the rule and the
 character offsets. For an acknowledgement: the same, plus the record it was
-attached to. **Never the offending string** — not in the audit log, not in the
+attached to — except on a pulse response or answer, which is anonymous by
+design: there the acknowledgement records the user and the rule types only,
+never the response's id or the flag's position, because either would let
+someone holding the response text find the audit row and so the person (see
+"Pulse anonymity" below). **Never the offending string** — not in the audit log, not in the
 error returned to the browser, not in a server log. Text that trips a block is
 never written to any table, including the audit table.
 
@@ -197,7 +202,9 @@ outcome, sustainability plan, and archived project records — including, from
 phase 5, what a project achieved and why it ended (`outcomeSummary`,
 `endReason`), which duplicate detection shows to every later team on the same
 problem, and who leads and coaches it. Barrier themes,
-their paraphrased summaries, decisions and what changed. The library. Events.
+their paraphrased summaries, decisions and what changed. From phase 6: the pulse
+survey's questions and the published "You reported, we changed" digest. The
+library. Events.
 
 ### Restricted to the owning program, the assigned coach, and the chair
 
@@ -215,7 +222,9 @@ coach with no assignment to it does not, even in the same program.
 ### Chair only
 
 Named pulse responses, the raw barrier text behind a theme, judge scores,
-curriculum records, usage instrumentation, and the audit log.
+curriculum records, usage instrumentation, and the audit log. From phase 6:
+answers to the chair's own survey questions, and who responded (shown only as a
+response rate by program).
 
 ### Default deny
 
@@ -239,12 +248,48 @@ transitions, aim and definition versions, PDSA completions, handoff generation
 and acceptance, mail sent or logged, barrier status changes, exports, and job
 runs.
 
+## Pulse anonymity
+
+The survey's name and program fields are opt-in, off by default, and say who
+sees them (§6.4). An anonymous response is anonymous to the application and to
+anyone reading its tables through it, including the chair:
+
+- **Who responded is stored apart from what they said.** `PulseParticipation`
+  records that a person answered a quarter's survey — the response rate's
+  numerator and the one-response-per-quarter rule — with no timestamp and no
+  link to the response.
+- **A response carries nothing that joins it back.** Its id is a random UUID
+  (a cuid embeds a timestamp); it keeps the day it was submitted, not the time;
+  it has no acknowledgement timestamp; and the audit log's record of a PHI
+  acknowledgement on it has neither its id nor the flag's offsets.
+- **"My responses" uses a receipt the server cannot use.** The respondent's
+  browser keeps a random token in an httpOnly cookie; the response stores
+  SHA-256 of the token and the user's id. Without the browser, the server
+  cannot find a person's anonymous response. Because the hash includes the user
+  id, the next person to sign in on a shared ward workstation does not see the
+  previous person's responses.
+- **Themes paraphrase.** Theme labels and summaries, which every trainee reads,
+  may not contain six or more consecutive words from any response behind
+  them — checked on every save, whoever wrote the text.
+
+**What this does not protect against.** Someone with direct database or server
+access, correlating the day a response was submitted with the time of a
+`pulse.response_submitted` or acknowledgement audit row on that day, may
+narrow a response to the few people who responded that day. A respondent who
+shares their program in a small program may be identifiable from that alone,
+which the form says. And what a person writes can identify them however it is
+stored. The design stops the application from connecting a person to an
+anonymous response; it is not a cryptographic anonymity guarantee.
+
 ## Append-only historical records
 
 Aim statements and measure operational definitions are append-only, enforced
 by triggers. An older aim explains what a chart meant at the time it was
 plotted; editing one silently rewrites the past. Corrections are made by
 inserting the next version.
+
+A submitted pulse response cannot be edited (migration `pulse_surveys`); only
+a foreign key being cleared by a deletion elsewhere is allowed through.
 
 Measure definitions permit exactly one post-insert mutation: recording that the
 user confirmed the plain-language restatement matches their intent. Nothing

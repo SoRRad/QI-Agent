@@ -51,6 +51,18 @@ export const SENSITIVITY_POLICY: Readonly<Record<string, SensitivityTier>> = {
   "Barrier.status": "cross_program",
   "Barrier.decision": "cross_program",
   "Barrier.whatChanged": "cross_program",
+  "Barrier.escalationTarget": "cross_program",
+  "Barrier.count": "cross_program",
+  "Barrier.quarter": "cross_program",
+  "Barrier.ownerId": "cross_program",
+  "Barrier.raisedAt": "cross_program",
+  "Barrier.atGmecAt": "cross_program",
+  "Barrier.decidedAt": "cross_program",
+  "Barrier.closedAt": "cross_program",
+  // The survey itself and the published digest are what every trainee sees.
+  "PulseSurvey.*": "cross_program",
+  "PulseQuestion.*": "cross_program",
+  "PulseDigest.*": "cross_program",
   "Event.*": "cross_program",
   "Program.*": "cross_program",
 
@@ -73,6 +85,9 @@ export const SENSITIVITY_POLICY: Readonly<Record<string, SensitivityTier>> = {
   "PulseResponse.respondentName": "chair_only",
   "PulseResponse.barrierText": "chair_only",
   "PulseResponse.*": "chair_only",
+  "PulseAnswer.*": "chair_only",
+  // Who responded is shown only as a rate by program.
+  "PulseParticipation.*": "chair_only",
   "JudgeScore.*": "chair_only",
   "AuditLog.*": "chair_only",
   "KnowledgeGap.*": "chair_only",

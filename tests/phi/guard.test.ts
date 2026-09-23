@@ -64,6 +64,10 @@ describe("what the guard skips", () => {
     expect(scanWriteData("Project", { programId: "123456789" })).toEqual([]);
   });
 
+  it("skips hex digests, which contain long digit runs by chance", () => {
+    expect(scanWriteData("PulseResponse", { receiptHash: "5d41402abc4b2a76b9719d911017c592123456789abcdef0123456789abcdef0" })).toEqual([]);
+  });
+
   it("skips where-filters and relation links", () => {
     expect(
       scanWriteData("Project", {

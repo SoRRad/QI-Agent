@@ -15,6 +15,8 @@ import { audit } from "@/lib/audit";
 
 export interface MailMessage {
   to: string[];
+  /** Blind copies, for broadcasts: recipients do not see one another. */
+  bcc?: string[];
   subject: string;
   text: string;
   /** What the message is for, e.g. "handoff.packet". Recorded in the audit log. */
@@ -41,7 +43,7 @@ export interface MailDependencies {
   env?: Record<string, string | undefined>;
   fetch?: typeof fetch;
   /** Replaces the SMTP transport, for tests. */
-  smtpSend?: (options: { from: string; to: string[]; subject: string; text: string }) => Promise<unknown>;
+  smtpSend?: (options: { from: string; to: string[]; bcc?: string[]; subject: string; text: string }) => Promise<unknown>;
   audit?: typeof audit;
 }
 
@@ -58,8 +60,11 @@ export async function sendMail(message: MailMessage, deps: MailDependencies = {}
   const record = deps.audit ?? audit;
   const provider = mailProvider(env);
   const from = env["MAIL_FROM"] || "qi-agent@localhost";
-  const to = [...new Set(message.to.map((t) => t.trim()).filter(Boolean))];
-  if (to.length === 0) throw new MailConfigurationError("A message needs at least one recipient.");
+  const clean = (list: readonly string[] = []) => [...new Set(list.map((t) => t.trim()).filter(Boolean))];
+  const to = clean(message.to);
+  const bcc = clean(message.bcc).filter((b) => !to.includes(b));
+  if (to.length + bcc.length === 0) throw new MailConfigurationError("A message needs at least one recipient.");
+  const blind = bcc.length ? { bcc } : {};
 
   if (provider === "log") {
     // The rendered message is the record. It was built from text that already
@@ -68,21 +73,21 @@ export async function sendMail(message: MailMessage, deps: MailDependencies = {}
       action: "mail.logged",
       entity: message.entity ?? null,
       entityId: message.entityId ?? null,
-      metadata: { purpose: message.purpose, to, from, subject: message.subject, text: message.text },
+      metadata: { purpose: message.purpose, to, ...blind, from, subject: message.subject, text: message.text },
     });
     return { provider, delivered: false };
   }
 
   if (provider === "smtp") {
     const send = deps.smtpSend ?? (await smtpTransport(env));
-    await send({ from, to, subject: message.subject, text: message.text });
+    await send({ from, to, ...blind, subject: message.subject, text: message.text });
   } else {
     const key = env["RESEND_API_KEY"];
     if (!key) throw new MailConfigurationError("MAIL_PROVIDER=resend needs RESEND_API_KEY.");
     const response = await (deps.fetch ?? fetch)("https://api.resend.com/emails", {
       method: "POST",
       headers: { authorization: `Bearer ${key}`, "content-type": "application/json" },
-      body: JSON.stringify({ from, to, subject: message.subject, text: message.text }),
+      body: JSON.stringify({ from, to: to.length ? to : [from], ...blind, subject: message.subject, text: message.text }),
     });
     if (!response.ok) throw new Error(`The mail service refused the message (HTTP ${response.status}).`);
   }
@@ -92,7 +97,7 @@ export async function sendMail(message: MailMessage, deps: MailDependencies = {}
     action: "mail.sent",
     entity: message.entity ?? null,
     entityId: message.entityId ?? null,
-    metadata: { purpose: message.purpose, provider, to, subject: message.subject },
+    metadata: { purpose: message.purpose, provider, to, ...blind, subject: message.subject },
   });
   return { provider, delivered: true };
 }
@@ -108,5 +113,5 @@ async function smtpTransport(env: Record<string, string | undefined>) {
     secure: port === 465,
     ...(env["SMTP_USER"] ? { auth: { user: env["SMTP_USER"], pass: env["SMTP_PASSWORD"] ?? "" } } : {}),
   });
-  return (options: { from: string; to: string[]; subject: string; text: string }) => transport.sendMail(options);
+  return (options: { from: string; to: string[]; bcc?: string[]; subject: string; text: string }) => transport.sendMail(options);
 }

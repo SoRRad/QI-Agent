@@ -14,6 +14,7 @@ import {
 import { validateAim } from "@/lib/aim/validate";
 import { ActionForm, Field, inputClass, textareaClass } from "./ActionForm";
 import { AimRubric } from "./AimRubric";
+import { CLER_OPTIONS } from "@/lib/cler";
 
 // ---------------------------------------------------------------- problem
 
@@ -253,14 +254,6 @@ export function PeopleForm({
   );
 }
 
-const CLER_OPTIONS = [
-  ["patient_safety", "Patient safety"],
-  ["health_care_quality", "Health care quality"],
-  ["care_transitions", "Care transitions"],
-  ["supervision", "Supervision"],
-  ["well_being", "Well-being"],
-  ["professionalism", "Professionalism"],
-] as const;
 
 export function ContextForm({ projectId, initial }: { projectId: string; initial: { clerDomain: string; equityStratificationPlan: string } }) {
   return (

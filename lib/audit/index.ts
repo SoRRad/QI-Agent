@@ -36,6 +36,10 @@ export type AuditAction =
   | "mail.sent"
   | "mail.logged"
   | "pulse.response_submitted"
+  | "pulse.survey_changed"
+  | "pulse.digest_published"
+  | "barrier.created"
+  | "barrier.updated"
   | "barrier.status_changed"
   | "export.generated"
   | "job.run";

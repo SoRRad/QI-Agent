@@ -1,5 +1,6 @@
 import "dotenv/config";
 import { defineConfig } from "@playwright/test";
+import { E2E_TRAINEE_EMAIL, TRAINEE_BASE_URL, TRAINEE_PORT } from "./tests/e2e/env";
 
 /**
  * The browser suite runs its own server, on its own port, against the TEST
@@ -10,6 +11,7 @@ import { defineConfig } from "@playwright/test";
 const PORT = process.env["E2E_PORT"] ?? "3100";
 const baseURL = process.env["E2E_BASE_URL"] ?? `http://127.0.0.1:${PORT}`;
 const databaseUrl = process.env["DATABASE_URL_TEST"] ?? process.env["DATABASE_URL"];
+
 
 /**
  * Where a sandbox or CI image ships its own Chromium rather than the revision
@@ -22,6 +24,7 @@ const launchOptions = executablePath ? { launchOptions: { executablePath } } : {
 
 export default defineConfig({
   testDir: "./tests/e2e",
+  globalSetup: "./tests/e2e/global-setup.ts",
   fullyParallel: true,
   forbidOnly: !!process.env["CI"],
   retries: process.env["CI"] ? 1 : 0,
@@ -52,14 +55,31 @@ export default defineConfig({
   ],
   webServer: process.env["E2E_BASE_URL"]
     ? undefined
-    : {
-        command: "pnpm start",
-        url: `${baseURL}/api/health`,
-        reuseExistingServer: false,
-        timeout: 120_000,
-        env: {
-          PORT,
-          ...(databaseUrl ? { DATABASE_URL: databaseUrl } : {}),
+    : [
+        {
+          command: "pnpm start",
+          url: `${baseURL}/api/health`,
+          reuseExistingServer: false,
+          timeout: 120_000,
+          env: {
+            PORT,
+            ...(databaseUrl ? { DATABASE_URL: databaseUrl } : {}),
+          },
         },
-      },
+        // A second production server whose configured identity is a trainee.
+        // Production ignores the dev role switcher, so this is how the suite
+        // exercises trainee-only flows (the pulse survey) without adding a way
+        // to change user that production would also have.
+        {
+          command: "pnpm start",
+          url: `${TRAINEE_BASE_URL}/api/health`,
+          reuseExistingServer: false,
+          timeout: 120_000,
+          env: {
+            PORT: TRAINEE_PORT,
+            DEV_USER_EMAIL: E2E_TRAINEE_EMAIL,
+            ...(databaseUrl ? { DATABASE_URL: databaseUrl } : {}),
+          },
+        },
+      ],
 });

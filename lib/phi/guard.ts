@@ -52,7 +52,11 @@ export const DATE_EXEMPT_FIELDS: Readonly<Record<string, readonly string[]>> = {
   summary: ["Handoff"],
 };
 
-/** Never scanned: identifiers, not prose. Keys ending in `Id` are skipped too. */
+/**
+ * Never scanned: identifiers, not prose. Keys ending in `Id` (foreign keys)
+ * and `Hash` (hex digests, which contain long digit runs by chance) are
+ * skipped too.
+ */
 const SKIP_FIELDS = new Set(["id", "email", "slug"]);
 
 /** Prisma write operators: the field being written is the enclosing key. */
@@ -114,7 +118,7 @@ type Visit = (text: string, field: string, path: string) => void;
 
 function walk(value: unknown, field: string | null, path: string[], visit: Visit): void {
   if (typeof value === "string") {
-    if (!field || SKIP_FIELDS.has(field) || /Id$/.test(field)) return;
+    if (!field || SKIP_FIELDS.has(field) || /(Id|Hash)$/.test(field)) return;
     visit(value, field, path.join("."));
     return;
   }

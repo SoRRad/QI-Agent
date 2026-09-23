@@ -4,6 +4,8 @@ import { dataRequestPrompt } from "./dataRequest";
 import { definitionRestatementPrompt } from "./definitionRestatement";
 import { devilsAdvocatePrompt } from "./devilsAdvocate";
 import { duplicateRerankPrompt } from "./duplicateRerank";
+import { pulseDigestPrompt } from "./pulseDigest";
+import { pulseThemePrompt } from "./pulseTheme";
 import { tutorPrompt } from "./tutor";
 import type { PromptDefinition } from "./types";
 
@@ -22,6 +24,10 @@ export type { DataRequestInput, DataRequestOutput } from "./dataRequest";
 export type { DevilsAdvocateInput, DevilsAdvocateOutput } from "./devilsAdvocate";
 export { duplicateRerankPrompt, rerankSource } from "./duplicateRerank";
 export type { RerankCandidate, RerankInput, RerankOutput } from "./duplicateRerank";
+export { pulseThemePrompt, MAX_THEMES } from "./pulseTheme";
+export type { ThemeBarrier, ThemeInput, ThemeOutput, ThemeResponse } from "./pulseTheme";
+export { pulseDigestPrompt, digestSource } from "./pulseDigest";
+export type { DigestBarrier, DigestInput, DigestOutput } from "./pulseDigest";
 
 /**
  * Every prompt in the system. docs/PROMPTS.md must have a section for each id
@@ -36,4 +42,6 @@ export const ALL_PROMPTS: ReadonlyArray<PromptDefinition<never, unknown>> = [
   definitionRestatementPrompt as PromptDefinition<never, unknown>,
   dataRequestPrompt as PromptDefinition<never, unknown>,
   duplicateRerankPrompt as PromptDefinition<never, unknown>,
+  pulseThemePrompt as PromptDefinition<never, unknown>,
+  pulseDigestPrompt as PromptDefinition<never, unknown>,
 ];

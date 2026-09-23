@@ -285,3 +285,60 @@ reason. If the retry fails, or the provider is unavailable, the page still
 shows the top three recall candidates, labelled as not checked for relevance:
 the committee would rather a trainee see a possibly related project than
 nothing.
+
+## `pulse.theme`
+
+**What it is for.** Reading a quarter's pulse survey. Trainees describe what got
+in the way of improvement work, in their own words; this prompt groups those
+answers into three to six themes, each with a plain-language label, a
+paraphrased summary and a suggested escalation target (the QI committee, GMEC,
+or a program). The chair edits each proposal and saves it as a barrier, or adds
+it to a barrier already open.
+
+**What the model is shown.** The free-text answers, each with a key, and the
+label and summary of each open barrier, so it can say "this belongs with one
+you already have".
+
+**What the model is not shown.** Who wrote an answer, whether they gave their
+name, their program, their confidence rating, their CLER area, or the date.
+
+**What it must not do.**
+
+- Copy six or more consecutive words from any answer. Themes are read across
+  programs while the answers behind them are the chair's alone (Q4); a trainee
+  must not be recognisable by how they write. The same check runs again when
+  the chair saves a barrier, whoever wrote the words.
+- Write a number, in digits or words. How many answers a theme holds is counted
+  by the system from the keys the model assigned.
+- Leave an answer out, put one in two themes, invent a key, or match two themes
+  to the same open barrier.
+- Split one concern into two themes to reach three.
+
+**What happens if it breaks a rule.** Rejected and retried once with the reason.
+If the retry fails, or the provider is unavailable, no themes are proposed: the
+page lists the answers and the chair groups them by hand, writing the summary in
+their own words. Nothing the model writes is stored until the chair saves it.
+
+## `pulse.digest`
+
+**What it is for.** The trainee-facing "You reported, we changed" digest (§6.4):
+a short summary of barriers the committee has closed and what is different now.
+Closing the loop visibly is what keeps trainees reporting.
+
+**What the model is shown.** Closed barriers only, each with a key: the theme,
+the decision recorded, what changed, and the month it closed. All of it was
+written by the committee. It is never shown a survey answer.
+
+**What it must not do.**
+
+- Write about a barrier it was not given, leave one out, or cover one twice.
+- Introduce a number that is not in the records. It may repeat one ("a two-week
+  turnaround").
+- Promise further changes, or describe benefits the records do not state.
+
+**What happens if it breaks a rule.** Rejected and retried once. If the retry
+fails, or the provider is unavailable, the draft is assembled from each
+barrier's own "what changed" text instead, and says so. Either way it is a
+draft: the chair edits it and publishes it, the PHI guard reads what is
+published, and publishing refuses any barrier that is not closed or has already
+been reported.

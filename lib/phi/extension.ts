@@ -49,6 +49,19 @@ const WRITE_OPERATIONS = new Set([
  */
 const SYSTEM_MODELS = new Set(["AuditLog", "UsageEvent"]);
 
+/**
+ * Models whose rows are anonymous by design (ADR-0012). Acknowledging a
+ * warning on one is still audited with the user and the rule types (Q5), but
+ * never with the row's id or the flag's position: either would let someone
+ * holding the response text match the audit row, and so the person, to it.
+ */
+export const ANONYMOUS_MODELS = new Set(["PulseResponse", "PulseAnswer"]);
+
+function acknowledgementFlags(model: string, flags: FieldFlag[]): Array<Record<string, string | number>> {
+  if (!ANONYMOUS_MODELS.has(model)) return flags.map(toAuditFlag);
+  return flags.map((f) => ({ rule: f.rule, tier: f.tier, category: f.category, model: f.model }));
+}
+
 function writePayloads(operation: string, args: Record<string, unknown>): unknown[] {
   if (operation === "upsert") return [args["create"], args["update"]];
   return [args["data"]];
@@ -98,7 +111,7 @@ export function phiExtension(writeAudit: AuditWriter) {
           // not recorded as one.
           if (!trusted) {
             const entityId =
-              result && typeof result === "object" && "id" in result && typeof result.id === "string"
+              !ANONYMOUS_MODELS.has(model) && result && typeof result === "object" && "id" in result && typeof result.id === "string"
                 ? result.id
                 : null;
             await writeAudit({
@@ -106,7 +119,7 @@ export function phiExtension(writeAudit: AuditWriter) {
               action: "phi.warn_acknowledged",
               entity: model,
               entityId,
-              metadata: { operation, flags: warns.map(toAuditFlag) },
+              metadata: { operation, flags: acknowledgementFlags(model, warns) },
             });
           }
 
