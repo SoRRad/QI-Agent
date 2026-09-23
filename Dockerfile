@@ -81,6 +81,10 @@ COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
 COPY --from=builder --chown=nextjs:nodejs /app/prisma.config.ts ./prisma.config.ts
 COPY --from=builder --chown=nextjs:nodejs /app/content ./content
+# The PHI scanner's committee-maintained extensions are read at RUNTIME, so
+# they ship as a file rather than being bundled — which is what lets the
+# committee add a pattern without a rebuild.
+COPY --from=builder --chown=nextjs:nodejs /app/config ./config
 COPY --from=builder --chown=nextjs:nodejs /app/node_modules/prisma ./node_modules/prisma
 COPY --from=builder --chown=nextjs:nodejs /app/node_modules/.bin/prisma ./node_modules/.bin/prisma
 

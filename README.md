@@ -19,16 +19,37 @@ promised:
 
 ## Status
 
-Phases 0 and 1 of 9 are complete.
+Phases 0 to 6 of 9 are complete.
 
 **Phase 0** — scaffold, data model, migrations, seed, the auth seam, the design
 system, the five-destination shell, Docker, and the health endpoint.
 
 **Phase 1** — `lib/spc`, the statistical engine, built before any chart UI
-exists. Run charts with the four rules, XmR, p, u and c charts with stepped
-limits for variable subgroup sizes, and the Western Electric rules behind a
-flag. 93 tests; every rule and limit, its published source and its test case
-are listed in `docs/VALIDATION.md`.
+exists. Every rule and limit, its published source and its test case are listed
+in `docs/VALIDATION.md`.
+
+**Phase 2** — the PHI scanner, running inside the database client so no write
+can bypass it; the LLM adapter with four providers (mock by default); and the
+numeric guard, under which a model may not write a number at all.
+
+**Phase 3** — the library and its admin; Ask, which answers only from the
+library and verifies every quote it cites; tutor mode; and devil's advocate.
+
+**Phase 4** — the SPC studio: run and control charts drawn from `lib/spc`,
+frozen baselines, the chart-type advisor, the definition builder with its
+reproducibility check, data requests, and CSV upload that never sends the file.
+
+**Phase 5** — projects: the registry, the intake wizard that blocks with an
+explanation, duplicate detection against every cohort, the workspace (aim,
+driver diagram, measures, PDSA log, handoff), the stall job and the
+committee's stalled queue. Decisions are in `docs/ADR/0011-projects-workspace.md`.
+
+**Phase 6** — Pulse: the quarterly survey the chair composes, anonymous unless
+the respondent chooses otherwise; "My responses" from a receipt only the
+respondent's browser holds; response rate by program; theming into
+paraphrased themes; the barrier lifecycle; and the "You reported, we changed"
+digest, drafted from closed barriers only. Decisions are in
+`docs/ADR/0012-pulse.md`.
 
 See `PLAN.md` for the build order and the exit criteria for each phase.
 Destination pages carry a dated note naming the phase that builds the feature
@@ -53,13 +74,25 @@ masthead; `chair@example.edu` sees everything.
 ### Verifying
 
 ```bash
-pnpm verify    # typecheck, lint, unit tests, production build
-pnpm e2e       # Playwright smoke tests with axe, at 375px and 1280px
+pnpm test:db:prepare   # once: migrate and seed the separate TEST database
+pnpm verify            # typecheck, lint, unit tests, production build
+pnpm e2e               # Playwright with axe, at 375px and 1280px
 ```
 
 `pnpm verify` is the exit gate for every phase. No phase closes on a partial
-pass. The database-level guarantee tests skip themselves when `DATABASE_URL` is
-unset, so the unit suite runs on a machine with no Postgres — CI must set one.
+pass.
+
+**Tests never touch the development database.** They run against
+`DATABASE_URL_TEST`, and the Playwright suite starts its own servers on their
+own ports pointed at it: one as the chair (3100) and one as a trainee (3101),
+since production ignores the dev role switcher. It reseeds the test database
+before it starts, so flows that change state begin from the same demo. The reason is specific: the audit log is append-only, and
+tests that exercise PHI blocks write to it — against the demo database they
+would leave permanent rows in the audit trail a demo shows.
+`pnpm test:db:prepare` only applies migrations and reseeds; it never drops
+anything, and it refuses any database whose name does not contain "test".
+Suites that need a database skip themselves when none is configured, so the
+unit suite still runs on a machine with no Postgres.
 
 Where a sandbox or CI image ships its own Chromium rather than the revision
 this Playwright version pins, set `PLAYWRIGHT_CHROMIUM_EXECUTABLE` to it
@@ -73,6 +106,11 @@ rather than credentials:
 | Variable | Meaning |
 |---|---|
 | `LLM_PROVIDER` | `mock` (default, no credentials), `anthropic`, `azure-openai`, or `openai-compatible` for an internal gateway. |
+| `ANTHROPIC_MODEL` | Defaults to `claude-opus-5`. |
+| `ANTHROPIC_FALLBACKS` | `default` (on): a request the model declines is re-run on a fallback model within the same call. `off` disables it. |
+| `ANTHROPIC_EFFORT` | Optional cost/depth trade-off, `low` to `max`. Unset uses the API default. |
+| `LLM_MAX_TOKENS_PARAM` | `max_tokens` or `max_completion_tokens`, for chat-completions gateways that accept only one. |
+| `PHI_PATTERNS_PATH` | The committee's scanner extensions. Defaults to `config/phi-patterns.json`, read at runtime. |
 | `MAIL_PROVIDER` | `log` (default) records the rendered message to the audit table and sends nothing. A demo must never send mail. |
 | `APP_PASSCODE` | Production without SSO: gates the whole app behind one shared passcode. See `docs/SSO.md`. |
 | `DEV_USER_EMAIL` | Development identity. |
@@ -133,7 +171,7 @@ duplicate detection has its own seam at `lib/search/similar.ts`.
 - `docs/VALIDATION.md` — every SPC test case, its published source, and its
   expected value. This is the page that answers a challenge to a chart.
 - `docs/PROMPTS.md` — every prompt in plain language, for committee review by
-  non-engineers. Written alongside the features that use them.
+  non-engineers. A test fails if a prompt exists without a section there.
 
 ## What this system is not
 

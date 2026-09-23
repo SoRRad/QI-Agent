@@ -121,7 +121,7 @@ function xmr(observations: Observation[], options: ControlChartOptions): Compute
     movingRanges.push(Math.abs(current - previous));
   }
 
-  const mrBar = movingRanges.length > 0 ? mean(movingRanges) : 0;
+  const mrBar = options.movingRangeBar ?? (movingRanges.length > 0 ? mean(movingRanges) : 0);
   const halfWidth = XMR_INDIVIDUALS_MULTIPLIER * mrBar;
   const sigma = halfWidth / SIGMA_MULTIPLIER;
 

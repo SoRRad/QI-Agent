@@ -64,6 +64,12 @@ enum Cadence {
   annual
 }
 
+enum DriverKind {
+  primary
+  secondary
+  change
+}
+
 enum ActDecision {
   adopt
   adapt
@@ -133,10 +139,10 @@ model Program {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  users             User[]
-  projects          Project[]
-  pulseResponses    PulseResponse[]
-  usageEvents       UsageEvent[]
+  users          User[]
+  projects       Project[]
+  pulseResponses PulseResponse[]
+  usageEvents    UsageEvent[]
 
   @@index([specialty])
 }
@@ -153,21 +159,25 @@ model User {
 
   program Program? @relation(fields: [programId], references: [id], onDelete: SetNull)
 
-  coachedProjects     Project[]             @relation("ProjectCoach")
-  authoredAims        AimStatement[]        @relation("AimAuthor")
-  enteredDataPoints   DataPoint[]           @relation("DataPointEnteredBy")
-  createdDefinitions  MeasureDefinition[]   @relation("DefinitionAuthor")
-  promotedMeasures    Measure[]             @relation("MeasurePromotedBy")
-  handoffsFrom        Handoff[]             @relation("HandoffFrom")
-  handoffsTo          Handoff[]             @relation("HandoffTo")
-  handoffsAccepted    Handoff[]             @relation("HandoffAcceptedBy")
-  ownedBarriers       Barrier[]             @relation("BarrierOwner")
-  judgeScores         JudgeScore[]          @relation("JudgeScoreJudge")
+  coachedProjects     Project[]            @relation("ProjectCoach")
+  ownedProjects       Project[]            @relation("ProjectOwner")
+  authoredAims        AimStatement[]       @relation("AimAuthor")
+  enteredDataPoints   DataPoint[]          @relation("DataPointEnteredBy")
+  createdDefinitions  MeasureDefinition[]  @relation("DefinitionAuthor")
+  promotedMeasures    Measure[]            @relation("MeasurePromotedBy")
+  handoffsFrom        Handoff[]            @relation("HandoffFrom")
+  handoffsTo          Handoff[]            @relation("HandoffTo")
+  handoffsAccepted    Handoff[]            @relation("HandoffAcceptedBy")
+  ownedBarriers       Barrier[]            @relation("BarrierOwner")
+  pulseParticipations PulseParticipation[]
+  pulseResponses      PulseResponse[]      @relation("PulseRespondent")
+  pulseDigests        PulseDigest[]        @relation("DigestAuthor")
+  judgeScores         JudgeScore[]         @relation("JudgeScoreJudge")
   curriculumRecords   CurriculumRecord[]
-  milestoneMaps       MilestoneMap[]        @relation("MilestoneSubject")
-  milestoneReviews    MilestoneMap[]        @relation("MilestonePdReviewer")
-  libraryDocEdits     LibraryDoc[]          @relation("LibraryDocEditor")
-  askedKnowledgeGaps  KnowledgeGap[]        @relation("KnowledgeGapAsker")
+  milestoneMaps       MilestoneMap[]       @relation("MilestoneSubject")
+  milestoneReviews    MilestoneMap[]       @relation("MilestonePdReviewer")
+  libraryDocEdits     LibraryDoc[]         @relation("LibraryDocEditor")
+  askedKnowledgeGaps  KnowledgeGap[]       @relation("KnowledgeGapAsker")
   auditLogs           AuditLog[]
   usageEvents         UsageEvent[]
 
@@ -176,54 +186,93 @@ model User {
 }
 
 model Project {
-  id                      String        @id @default(cuid())
-  title                   String
-  problemStatement        String
-  status                  ProjectStatus @default(draft)
-  programId               String
+  id                       String        @id @default(cuid())
+  title                    String
+  problemStatement         String
+  status                   ProjectStatus @default(draft)
+  programId                String
+  // The trainee who leads the project now. Handoff moves it; stall notices
+  // and the handoff packet go to this person.
+  ownerId                  String?
   // Structured staff-name fields. Exempt from PHI name patterns (Q7) because
   // they legitimately hold names; their free-text siblings are scanned.
-  clinicalOwner           String?
-  coachId                 String?
-  sponsor                 String?
-  analystContact          String?
-  cohortYear              Int?
-  clerDomain              ClerDomain?
+  clinicalOwner            String?
+  coachId                  String?
+  sponsor                  String?
+  analystContact           String?
+  cohortYear               Int?
+  clerDomain               ClerDomain?
   equityStratificationPlan String?
   // Trainee free text about obstacles — restricted to owning program, coach
   // and chair by the sensitivity policy (Q4).
-  obstacleNotes           String?
-  submittedAt             DateTime?
-  approvedAt              DateTime?
-  completedAt             DateTime?
-  archivedAt              DateTime?
+  obstacleNotes            String?
+  submittedAt              DateTime?
+  approvedAt               DateTime?
+  completedAt              DateTime?
+  archivedAt               DateTime?
   // Stall detection (§6.2): recomputed by the nightly job, never by hand.
-  lastActivityAt          DateTime      @default(now())
-  stalledAt               DateTime?
-  createdAt               DateTime      @default(now())
-  updatedAt               DateTime      @updatedAt
+  lastActivityAt           DateTime      @default(now())
+  stalledAt                DateTime?
+  // Why the stall job flagged it, in plain language, for the stalled queue.
+  stallReason              String?
+  // Cross-cohort learning (§6.2 duplicate detection): what the project
+  // achieved and why it ended. Set at completion or archival.
+  outcomeSummary           String?
+  endReason                String?
+  createdAt                DateTime      @default(now())
+  updatedAt                DateTime      @updatedAt
 
   program Program @relation(fields: [programId], references: [id], onDelete: Restrict)
   coach   User?   @relation("ProjectCoach", fields: [coachId], references: [id], onDelete: SetNull)
+  owner   User?   @relation("ProjectOwner", fields: [ownerId], references: [id], onDelete: SetNull)
 
-  aimStatements       AimStatement[]
-  measures            Measure[]
-  pdsaCycles          PdsaCycle[]
-  handoffs            Handoff[]
-  submissions         Submission[]
-  milestoneMaps       MilestoneMap[]
-  sustainabilityPlan  SustainabilityPlan?
+  aimStatements      AimStatement[]
+  measures           Measure[]
+  pdsaCycles         PdsaCycle[]
+  handoffs           Handoff[]
+  submissions        Submission[]
+  milestoneMaps      MilestoneMap[]
+  sustainabilityPlan SustainabilityPlan?
+  driverNodes        DriverNode[]
 
   @@index([programId, status])
+  @@index([ownerId])
   @@index([status])
   @@index([clerDomain])
   @@index([cohortYear])
   @@index([coachId])
+  // Trigram indexes for duplicate detection (ADR-0003). Declared here so that
+  // Prisma owns them: when they existed only in hand-written SQL, a generated
+  // migration dropped them as unknown. pg_trgm itself is created by the
+  // `hard_guarantees` migration.
+  @@index([title(ops: raw("gin_trgm_ops"))], type: Gin, map: "project_title_trgm_idx")
+  @@index([problemStatement(ops: raw("gin_trgm_ops"))], type: Gin, map: "project_problem_statement_trgm_idx")
+}
+
+// A driver diagram node: aim → primary drivers → secondary drivers → change
+// ideas (§6.2). The aim itself is the project's current AimStatement, so the
+// tree's roots are primary drivers.
+model DriverNode {
+  id        String     @id @default(cuid())
+  projectId String
+  parentId  String?
+  kind      DriverKind
+  text      String
+  position  Int        @default(0)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  project  Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  parent   DriverNode?  @relation("DriverTree", fields: [parentId], references: [id], onDelete: Cascade)
+  children DriverNode[] @relation("DriverTree")
+
+  @@index([projectId])
+  @@index([parentId])
 }
 
 // Append-only. The current aim is the highest version for a project.
 model AimStatement {
-  id             String   @id @default(cuid())
+  id             String    @id @default(cuid())
   projectId      String
   version        Int
   text           String
@@ -235,7 +284,7 @@ model AimStatement {
   deadline       DateTime?
   population     String?
   authorId       String?
-  createdAt      DateTime @default(now())
+  createdAt      DateTime  @default(now())
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
   author  User?   @relation("AimAuthor", fields: [authorId], references: [id], onDelete: SetNull)
@@ -258,6 +307,11 @@ model Measure {
   promotedAt   DateTime?
   promotedById String?
 
+  // A project measure built on a shared library definition (§6.3: "projects
+  // link to a library measure or declare a local one"). When that library
+  // measure is superseded, every chart built on it carries the banner below.
+  basedOnId String?
+
   // Deprecation (addition C3). Charts built on a superseded definition carry a
   // banner naming the change and the date; silently changing the meaning of a
   // shared definition is what destroys trust in year two.
@@ -269,41 +323,44 @@ model Measure {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  project     Project?  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  promotedBy  User?     @relation("MeasurePromotedBy", fields: [promotedById], references: [id], onDelete: SetNull)
-  supersededBy Measure? @relation("MeasureSupersession", fields: [supersededById], references: [id], onDelete: SetNull)
-  supersedes   Measure[] @relation("MeasureSupersession")
+  project         Project?  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  promotedBy      User?     @relation("MeasurePromotedBy", fields: [promotedById], references: [id], onDelete: SetNull)
+  supersededBy    Measure?  @relation("MeasureSupersession", fields: [supersededById], references: [id], onDelete: SetNull)
+  supersedes      Measure[] @relation("MeasureSupersession")
+  basedOn         Measure?  @relation("MeasureBasedOn", fields: [basedOnId], references: [id], onDelete: SetNull)
+  derivedMeasures Measure[] @relation("MeasureBasedOn")
 
-  definitions MeasureDefinition[]
-  dataPoints  DataPoint[]
-  annotations Annotation[]
+  definitions         MeasureDefinition[]
+  dataPoints          DataPoint[]
+  annotations         Annotation[]
   sustainabilityPlans SustainabilityPlan[]
 
   @@index([projectId])
   @@index([isLibrary, deprecated])
   @@index([type])
+  @@index([basedOnId])
 }
 
 // Append-only operational definition. The builder refuses to save unless every
 // field is present (§6.3); nullability here is only for the reproducibility
 // fields, which are filled after the user confirms the restatement.
 model MeasureDefinition {
-  id          String   @id @default(cuid())
-  measureId   String
-  version     Int
-  numerator   String
-  denominator String
-  inclusions  String
-  exclusions  String
-  dataSource  String
-  puller      String
-  cadence     Cadence
+  id                         String    @id @default(cuid())
+  measureId                  String
+  version                    Int
+  numerator                  String
+  denominator                String
+  inclusions                 String
+  exclusions                 String
+  dataSource                 String
+  puller                     String
+  cadence                    Cadence
   // The LLM restates the definition as a plain-language data query and the
   // user confirms it matches intent. The restatement is stored as evidence.
   reproducibilityRestatement String?
   reproducibilityConfirmedAt DateTime?
-  createdById String?
-  createdAt   DateTime @default(now())
+  createdById                String?
+  createdAt                  DateTime  @default(now())
 
   measure   Measure @relation(fields: [measureId], references: [id], onDelete: Cascade)
   createdBy User?   @relation("DefinitionAuthor", fields: [createdById], references: [id], onDelete: SetNull)
@@ -313,21 +370,21 @@ model MeasureDefinition {
 }
 
 model DataPoint {
-  id          String   @id @default(cuid())
-  measureId   String
+  id           String   @id @default(cuid())
+  measureId    String
   // periodIndex gives deterministic chart ordering; periodLabel is for display.
-  periodIndex Int
-  periodLabel String
-  numerator   Float?
-  denominator Float?
+  periodIndex  Int
+  periodLabel  String
+  numerator    Float?
+  denominator  Float?
   // Computed in TypeScript on write, never by the LLM (constraint 1).
-  value       Float
+  value        Float
   // Subgroup size for p and u charts with variable denominators, which produce
   // stepped control limits.
   subgroupSize Float?
-  notes       String?
-  enteredById String?
-  createdAt   DateTime @default(now())
+  notes        String?
+  enteredById  String?
+  createdAt    DateTime @default(now())
 
   measure   Measure @relation(fields: [measureId], references: [id], onDelete: Cascade)
   enteredBy User?   @relation("DataPointEnteredBy", fields: [enteredById], references: [id], onDelete: SetNull)
@@ -352,10 +409,10 @@ model Annotation {
 }
 
 model PdsaCycle {
-  id        String @id @default(cuid())
-  projectId String
-  number    Int
-  plan      String
+  id           String       @id @default(cuid())
+  projectId    String
+  number       Int
+  plan         String
   // Non-negotiable: a cycle cannot be completed without a prediction. Enforced
   // by a CHECK constraint, not only by the UI.
   prediction   String?
@@ -365,8 +422,8 @@ model PdsaCycle {
   plannedStart DateTime?
   plannedEnd   DateTime?
   completedAt  DateTime?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
@@ -417,26 +474,145 @@ model SustainabilityPlan {
 
 // ---------------------------------------------------------------- pulse
 
-model PulseResponse {
-  id         String      @id @default(cuid())
-  quarter    String
-  confidence Int
-  clerDomain ClerDomain?
-  barrierText String?
-  // Identification is genuinely optional and labelled as follow-up only.
-  respondentName String?
-  programId      String?
-  // Warn-tier PHI acknowledgement (Q5/Q7). Block-tier text never reaches here.
-  phiAcknowledgedAt    DateTime?
-  phiAcknowledgedFlags Json?
-  createdAt DateTime @default(now())
+enum PulseSurveyStatus {
+  draft
+  open
+  closed
+}
 
-  program  Program?  @relation(fields: [programId], references: [id], onDelete: SetNull)
-  barriers Barrier[] @relation("BarrierPulseResponses")
+enum PulseQuestionKind {
+  scale
+  single_choice
+  free_text
+  cler_domain
+}
+
+// The default instrument's three questions (§6.4). They are always present so
+// that confidence, domain and barrier text stay comparable quarter to quarter;
+// the chair may reword them but not remove them (ADR-0012).
+enum PulseCoreField {
+  confidence
+  cler_domain
+  barrier
+}
+
+model PulseSurvey {
+  id        String            @id @default(cuid())
+  // Calendar quarter, e.g. "2026-Q3". One survey per quarter.
+  quarter   String            @unique
+  status    PulseSurveyStatus @default(draft)
+  intro     String?
+  openedAt  DateTime?
+  closedAt  DateTime?
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+
+  questions      PulseQuestion[]
+  responses      PulseResponse[]
+  participations PulseParticipation[]
+}
+
+model PulseQuestion {
+  id       String            @id @default(cuid())
+  surveyId String
+  position Int
+  kind     PulseQuestionKind
+  core     PulseCoreField?
+  prompt   String
+  help     String?
+  required Boolean           @default(false)
+  // Choices for single_choice questions.
+  options  String[]
+
+  survey  PulseSurvey   @relation(fields: [surveyId], references: [id], onDelete: Cascade)
+  answers PulseAnswer[]
+
+  @@unique([surveyId, core])
+  @@index([surveyId, position])
+}
+
+// Who responded, never what they said: the response rate's numerator, and
+// the one-response-per-quarter rule. Deliberately no timestamp and no link to
+// the response, so the two cannot be joined (ADR-0012).
+model PulseParticipation {
+  surveyId String
+  userId   String
+
+  survey PulseSurvey @relation(fields: [surveyId], references: [id], onDelete: Cascade)
+  user   User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([surveyId, userId])
+  @@index([userId])
+}
+
+model PulseResponse {
+  // A random UUID, not a cuid: cuids embed a timestamp, which would let a
+  // response be ordered against the audit log.
+  id               String      @id @default(uuid())
+  surveyId         String
+  quarter          String
+  confidence       Int
+  clerDomain       ClerDomain?
+  barrierText      String?
+  // Identification is genuinely optional and labelled as follow-up only.
+  // Both are null unless the respondent chose to be identified.
+  respondentName   String?
+  respondentUserId String?
+  programId        String?
+  // SHA-256 of a random receipt held only in the respondent's browser, bound
+  // to their user id. Lets them see an anonymous response again ("My
+  // responses") without the server being able to connect it to them.
+  receiptHash      String?     @unique
+  // A warn-tier PHI acknowledgement is recorded in the audit log only (Q5),
+  // without this row's id. A timestamp here could be matched against it.
+  // The day only. A full timestamp could be matched against the audit log.
+  submittedOn      DateTime    @default(now()) @db.Date
+
+  survey     PulseSurvey   @relation(fields: [surveyId], references: [id], onDelete: Restrict)
+  program    Program?      @relation(fields: [programId], references: [id], onDelete: SetNull)
+  respondent User?         @relation("PulseRespondent", fields: [respondentUserId], references: [id], onDelete: SetNull)
+  answers    PulseAnswer[]
+  barriers   Barrier[]     @relation("BarrierPulseResponses")
 
   @@index([quarter])
+  @@index([surveyId])
   @@index([programId, quarter])
   @@index([clerDomain])
+  @@index([respondentUserId])
+}
+
+// Answers to the chair's own questions. The core questions are columns on
+// PulseResponse.
+model PulseAnswer {
+  id         String  @id @default(uuid())
+  responseId String
+  questionId String
+  text       String?
+  number     Int?
+
+  response PulseResponse @relation(fields: [responseId], references: [id], onDelete: Cascade)
+  question PulseQuestion @relation(fields: [questionId], references: [id], onDelete: Restrict)
+
+  @@unique([responseId, questionId])
+  @@index([questionId])
+}
+
+// "You reported, we changed" (§6.4, addition C2). Written by the chair from a
+// generated draft; items name only closed barriers.
+model PulseDigest {
+  id          String    @id @default(cuid())
+  headline    String
+  intro       String
+  // [{ barrierId, text }], in display order.
+  items       Json
+  barrierIds  String[]
+  createdById String?
+  createdAt   DateTime  @default(now())
+  publishedAt DateTime?
+
+  createdBy User? @relation("DigestAuthor", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([publishedAt])
 }
 
 model Barrier {
@@ -517,12 +693,12 @@ model JudgeScore {
 }
 
 model CurriculumRecord {
-  id          String   @id @default(cuid())
+  id          String    @id @default(cuid())
   userId      String
   item        String
   completedAt DateTime?
   source      String?
-  createdAt   DateTime @default(now())
+  createdAt   DateTime  @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -531,12 +707,12 @@ model CurriculumRecord {
 }
 
 model MilestoneMap {
-  id            String   @id @default(cuid())
-  projectId     String
-  userId        String
-  milestoneCode String
-  evidenceText  String
-  generatedAt   DateTime @default(now())
+  id             String    @id @default(cuid())
+  projectId      String
+  userId         String
+  milestoneCode  String
+  evidenceText   String
+  generatedAt    DateTime  @default(now())
   // Always a draft until a program director signs off (§6.6).
   pdReviewedAt   DateTime?
   pdReviewedById String?
@@ -552,20 +728,20 @@ model MilestoneMap {
 // ---------------------------------------------------------------- library
 
 model LibraryDoc {
-  id      String  @id @default(cuid())
-  slug    String  @unique
-  title   String
-  body    String
+  id                  String   @id @default(cuid())
+  slug                String   @unique
+  title               String
+  body                String
   // isLocal documents are placeholders requiring institutional policy. They
   // render with a persistent LOCAL badge, and any Ask answer citing one
   // carries a banner (Q1).
-  isLocal Boolean @default(false)
+  isLocal             Boolean  @default(false)
   // For isLocal placeholders: exactly which fields the institution must supply.
   localFieldsRequired String[]
-  version     Int      @default(1)
-  updatedById String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  version             Int      @default(1)
+  updatedById         String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
 
   updatedBy User? @relation("LibraryDocEditor", fields: [updatedById], references: [id], onDelete: SetNull)
 
@@ -577,15 +753,15 @@ model LibraryDoc {
 // Questions Ask could not answer from the library. This is the queue of
 // documents the institution still owes, reviewed by the chair (§6.1).
 model KnowledgeGap {
-  id         String             @id @default(cuid())
-  question   String
-  gapSummary String?
-  status     KnowledgeGapStatus @default(open)
-  askCount   Int                @default(1)
-  askedById  String?
+  id              String             @id @default(cuid())
+  question        String
+  gapSummary      String?
+  status          KnowledgeGapStatus @default(open)
+  askCount        Int                @default(1)
+  askedById       String?
   resolvedByDocId String?
-  createdAt  DateTime           @default(now())
-  updatedAt  DateTime           @updatedAt
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
 
   askedBy       User?       @relation("KnowledgeGapAsker", fields: [askedById], references: [id], onDelete: SetNull)
   resolvedByDoc LibraryDoc? @relation("KnowledgeGapResolvedBy", fields: [resolvedByDocId], references: [id], onDelete: SetNull)
@@ -607,7 +783,11 @@ model AuditLog {
   metadata  Json?
   createdAt DateTime @default(now())
 
-  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+  // RESTRICT, not SET NULL: deleting a user must not rewrite who did what.
+  // A user with audit history is deactivated, never deleted (docs/SSO.md).
+  // With SET NULL the delete would cascade into an UPDATE that the
+  // append-only trigger refuses anyway; RESTRICT says so plainly.
+  user User? @relation(fields: [userId], references: [id], onDelete: Restrict)
 
   @@index([userId])
   @@index([entity, entityId])

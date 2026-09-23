@@ -85,6 +85,18 @@ export interface SpcAnalysis {
    * still plots; the rules are simply not evaluated.
    */
   notes: string[];
+  /**
+   * Present when the centre line (and any limits) were frozen from the first
+   * `length` points and extended across the rest of the series.
+   */
+  baseline?: BaselineInfo;
+}
+
+export interface BaselineInfo {
+  /** Number of leading points the centre line and limits were computed from. */
+  length: number;
+  firstLabel: string;
+  lastLabel: string;
 }
 
 export interface RunChartOptions {
@@ -124,4 +136,12 @@ export interface ControlChartOptions {
    * from the baseline rather than from the whole series.
    */
   centreLine?: number;
+  /**
+   * XmR only: a frozen average moving range from the baseline period. The p,
+   * u and c charts derive sigma from the centre line, so freezing the line
+   * freezes their limits; an XmR chart's sigma comes from the moving ranges,
+   * so it needs this as well, or the chart would draw a baseline mean between
+   * whole-series limits.
+   */
+  movingRangeBar?: number;
 }

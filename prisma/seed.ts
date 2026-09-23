@@ -11,15 +11,18 @@
  */
 
 import "dotenv/config";
-import { PrismaPg } from "@prisma/adapter-pg";
-import { PrismaClient } from "../lib/generated/prisma/client";
-import { loadLibraryDocs } from "../lib/content";
-import { DISCHARGE_SERIES, LAB_SERIES } from "./demo-data";
+import { createDb } from "@/lib/db";
+import { loadLibraryDocs } from "@/lib/content";
+import { runWithContext } from "@/lib/request-context";
+import { DEFAULT_INSTRUMENT } from "@/lib/pulse/instrument";
+import { DISCHARGE_SERIES, LAB_SERIES, READMISSION_SERIES } from "./demo-data";
 
-const connectionString = process.env["DATABASE_URL"];
-if (!connectionString) throw new Error("DATABASE_URL is not set. Copy .env.example to .env.");
-
-const db = new PrismaClient({ adapter: new PrismaPg({ connectionString }) });
+// The seed writes through the SAME guarded client as the application. It runs
+// as trusted content, so warn-tier flags (the full dates in PDSA notes, for
+// example) pass without an acknowledgement — but block-tier rules still apply,
+// so a seed run that completes is proof the demo data contains no patient
+// identifiers.
+const db = createDb();
 
 const daysAgo = (n: number): Date => new Date(Date.now() - n * 24 * 60 * 60 * 1000);
 
@@ -34,21 +37,29 @@ async function clear(): Promise<void> {
   await db.knowledgeGap.deleteMany();
   await db.libraryDoc.deleteMany();
   await db.$executeRawUnsafe(`DELETE FROM "_BarrierPulseResponses"`).catch(() => undefined);
+  await db.pulseDigest.deleteMany();
   await db.barrier.deleteMany();
+  await db.pulseAnswer.deleteMany();
   await db.pulseResponse.deleteMany();
+  await db.pulseParticipation.deleteMany();
+  await db.pulseQuestion.deleteMany();
+  await db.pulseSurvey.deleteMany();
   await db.sustainabilityPlan.deleteMany();
   await db.handoff.deleteMany();
   await db.pdsaCycle.deleteMany();
   await db.annotation.deleteMany();
   await db.dataPoint.deleteMany();
   await db.measureDefinition.deleteMany();
-  await db.measure.updateMany({ data: { supersededById: null } });
+  await db.measure.updateMany({ data: { supersededById: null, basedOnId: null } });
   await db.measure.deleteMany();
   await db.aimStatement.deleteMany();
   await db.usageEvent.deleteMany();
   await db.project.deleteMany();
-  await db.user.deleteMany();
-  await db.program.deleteMany();
+  // Users and programs are NOT deleted. The audit log may name them, and it
+  // is append-only: deleting a user would rewrite who did what, which the
+  // database refuses. They are upserted below by their natural keys instead,
+  // which also keeps their ids stable across reseeds, so the audit trail
+  // keeps pointing at the right people.
 }
 
 async function main(): Promise<void> {
@@ -70,42 +81,51 @@ async function main(): Promise<void> {
   const localCount = docs.filter((d) => d.isLocal).length;
 
   // --------------------------------------------------------------- programs
-  const medicine = await db.program.create({
-    data: {
-      name: "Internal Medicine Residency",
-      specialty: "Internal Medicine",
-      pdName: "Dr. A. Okonkwo",
-      acgmeId: "1401200001",
-    },
+  const program = (data: { name: string; specialty: string; pdName: string; acgmeId: string }) =>
+    db.program.upsert({ where: { acgmeId: data.acgmeId }, create: data, update: { ...data, active: true } });
+  const medicine = await program({
+    name: "Internal Medicine Residency",
+    specialty: "Internal Medicine",
+    pdName: "Dr. A. Okonkwo",
+    acgmeId: "1401200001",
   });
-  const surgery = await db.program.create({
-    data: {
-      name: "General Surgery Residency",
-      specialty: "General Surgery",
-      pdName: "Dr. M. Baptiste",
-      acgmeId: "4401200002",
-    },
+  const surgery = await program({
+    name: "General Surgery Residency",
+    specialty: "General Surgery",
+    pdName: "Dr. M. Baptiste",
+    acgmeId: "4401200002",
   });
 
   // ------------------------------------------------------------------ users
-  const chair = await db.user.create({
-    data: { email: "chair@example.edu", name: "Dr. R. Adeyemi", role: "chair", programId: medicine.id },
-  });
-  const coachMed = await db.user.create({
-    data: { email: "coach.medicine@example.edu", name: "Dr. S. Lindqvist", role: "coach", programId: medicine.id },
-  });
-  const coachSurg = await db.user.create({
-    data: { email: "coach.surgery@example.edu", name: "Dr. T. Nakamura", role: "coach", programId: surgery.id },
-  });
-  const traineeMed1 = await db.user.create({
-    data: { email: "resident1.medicine@example.edu", name: "Dr. J. Oyelaran", role: "trainee", programId: medicine.id },
-  });
-  const traineeMed2 = await db.user.create({
-    data: { email: "resident2.medicine@example.edu", name: "Dr. P. Whitfield", role: "trainee", programId: medicine.id },
-  });
-  const traineeSurg = await db.user.create({
-    data: { email: "resident1.surgery@example.edu", name: "Dr. K. Aluko", role: "trainee", programId: surgery.id },
-  });
+  const user = (data: { email: string; name: string; role: "chair" | "coach" | "trainee"; programId: string }) =>
+    db.user.upsert({ where: { email: data.email }, create: data, update: { ...data, active: true } });
+  const chair = await user({ email: "chair@example.edu", name: "Dr. R. Adeyemi", role: "chair", programId: medicine.id });
+  const coachMed = await user({ email: "coach.medicine@example.edu", name: "Dr. S. Lindqvist", role: "coach", programId: medicine.id });
+  const coachSurg = await user({ email: "coach.surgery@example.edu", name: "Dr. T. Nakamura", role: "coach", programId: surgery.id });
+  const traineeMed1 = await user({ email: "resident1.medicine@example.edu", name: "Dr. J. Oyelaran", role: "trainee", programId: medicine.id });
+  const traineeMed2 = await user({ email: "resident2.medicine@example.edu", name: "Dr. P. Whitfield", role: "trainee", programId: medicine.id });
+  const traineeSurg = await user({ email: "resident1.surgery@example.edu", name: "Dr. K. Aluko", role: "trainee", programId: surgery.id });
+
+  // The rest of each program's trainees. They exist so the pulse response
+  // rate has a real denominator: with SSO every resident is a user, whether or
+  // not they ever open a project.
+  const roster = async (names: readonly string[], slug: string, programId: string) => {
+    const users = [];
+    for (const [i, name] of names.entries()) {
+      users.push(await user({ email: `trainee${String(i + 3).padStart(2, "0")}.${slug}@example.edu`, name, role: "trainee", programId }));
+    }
+    return users;
+  };
+  const rosterMed = await roster(
+    ["Dr. A. Mensah", "Dr. L. Castillo", "Dr. H. Novak", "Dr. R. Iyer", "Dr. C. Okafor", "Dr. M. Haddad", "Dr. E. Lindgren", "Dr. S. Tanaka", "Dr. B. Moreau", "Dr. D. Kowalski", "Dr. F. Osei", "Dr. G. Rahman"],
+    "medicine",
+    medicine.id,
+  );
+  const rosterSurg = await roster(
+    ["Dr. N. Petrov", "Dr. O. Delgado", "Dr. V. Achebe", "Dr. W. Brennan", "Dr. Y. Sato", "Dr. Z. Farouk", "Dr. I. Magnusson", "Dr. U. Ferreira"],
+    "surgery",
+    surgery.id,
+  );
 
   // ------------------------------------------------- library (shared) measure
   // A superseded pair, so the deprecation banner (addition C3) is visible in
@@ -177,6 +197,7 @@ async function main(): Promise<void> {
         "Discharge summaries on the Hospitalist service are frequently signed days after the patient leaves, so the receiving primary care clinician has no document at the first post-discharge visit. Chart review of the last quarter found roughly a third of summaries signed beyond 48 hours, concentrated in weekend discharges.",
       status: "active",
       programId: medicine.id,
+      ownerId: traineeMed1.id,
       clinicalOwner: "Dr. H. Vasquez, Hospitalist Medical Director",
       coachId: coachMed.id,
       sponsor: "Dr. A. Okonkwo, Program Director",
@@ -304,6 +325,45 @@ async function main(): Promise<void> {
     });
   }
 
+  // Built on the SUPERSEDED 2024 readmission definition, so its chart carries
+  // the deprecation banner.
+  const readmission = await db.measure.create({
+    data: {
+      projectId: discharge.id,
+      name: "30-day readmission, Hospitalist service",
+      type: "outcome",
+      chartType: "p",
+      basedOnId: readmissionV1.id,
+      definitions: {
+        create: {
+          version: 1,
+          numerator: "Index admissions followed by any inpatient readmission within 30 days of discharge, including observation stays.",
+          denominator: "All adult discharges from the Hospitalist service in the measurement month.",
+          inclusions: "Age 18+; discharged alive; Hospitalist service.",
+          exclusions: "Planned readmissions; transfers to another acute facility; deaths during index stay.",
+          dataSource: "EDW inpatient encounter table",
+          puller: "Decision Support — R. Iyer",
+          cadence: "monthly",
+          createdById: traineeMed1.id,
+        },
+      },
+    },
+  });
+  for (const [index, point] of READMISSION_SERIES.entries()) {
+    await db.dataPoint.create({
+      data: {
+        measureId: readmission.id,
+        periodIndex: index + 1,
+        periodLabel: point.label,
+        numerator: point.readmitted,
+        denominator: point.discharges,
+        value: (point.readmitted / point.discharges) * 100,
+        subgroupSize: point.discharges,
+        enteredById: traineeMed1.id,
+      },
+    });
+  }
+
   await db.annotation.create({
     data: {
       measureId: dischargeOutcome.id,
@@ -323,6 +383,22 @@ async function main(): Promise<void> {
       description: "Structured template with the hospital course pre-populated from the daily progress notes.",
     },
   });
+
+  // Driver diagram: aim → primary drivers → secondary drivers → change ideas.
+  const driver = (kind: "primary" | "secondary" | "change", text: string, position: number, parentId: string | null = null) =>
+    db.driverNode.create({ data: { projectId: discharge.id, kind, text, position, parentId } });
+  const d1 = await driver("primary", "The summary is drafted while the team still knows the patient", 0);
+  const d1a = await driver("secondary", "Drafting happens before the patient physically leaves", 0, d1.id);
+  await driver("change", "Draft the summary in the existing 14:00 discharge huddle", 0, d1a.id);
+  await driver("change", "Pre-populate the hospital course from daily progress notes", 1, d1a.id);
+  const d1b = await driver("secondary", "The admitting resident, not cross-cover, owns the draft", 1, d1.id);
+  await driver("change", "Name the drafting resident on the team list each morning", 0, d1b.id);
+  const d2 = await driver("primary", "Weekend discharges are covered by someone who can write the summary", 1);
+  const d2a = await driver("secondary", "Cross-cover has the hospital course at hand", 0, d2.id);
+  await driver("change", "Structured weekend cross-cover template", 0, d2a.id);
+  const d3 = await driver("primary", "Unsigned summaries are visible before they are late", 2);
+  const d3a = await driver("secondary", "A daily list of unsigned summaries reaches the team", 0, d3.id);
+  await driver("change", "Add unsigned summaries to the morning huddle board", 0, d3a.id);
 
   await db.pdsaCycle.create({
     data: {
@@ -401,6 +477,10 @@ async function main(): Promise<void> {
         "Daily complete blood counts and metabolic panels were ordered as recurring standing orders on the general surgery ward regardless of clinical trajectory, producing avoidable phlebotomy, hospital-acquired anaemia risk and cost, and waking stable patients before 05:00.",
       status: "complete",
       programId: surgery.id,
+      ownerId: traineeSurg.id,
+      outcomeSummary:
+        "Routine draws fell from 2.3 to 1.5 per patient-day and stayed there for two quarters after the order set change. No harm from delayed electrolyte detection on chart review.",
+      endReason: "Completed. The order set change is permanent and the measure continues quarterly under the ward director.",
       clinicalOwner: "Dr. L. Marchetti, Surgical Ward Director",
       coachId: coachSurg.id,
       sponsor: "Dr. M. Baptiste, Program Director",
@@ -533,6 +613,8 @@ async function main(): Promise<void> {
         "Patients meeting sepsis criteria on the medical wards wait a median of 94 minutes for a first antibiotic dose, against an internal target of 60. The delay appears to sit between recognition and the order being placed rather than between order and administration.",
       status: "stalled",
       programId: medicine.id,
+      ownerId: traineeMed2.id,
+      stallReason: "No PDSA entry or data point in 60 days.",
       clinicalOwner: "Dr. C. Ibrahim, Sepsis Committee Chair",
       coachId: coachMed.id,
       sponsor: "Dr. A. Okonkwo, Program Director",
@@ -605,6 +687,47 @@ async function main(): Promise<void> {
     },
   });
 
+  // ============================================================= PROJECT 5
+  // Archived, from an earlier cohort. It exists so duplicate detection has a
+  // real precedent to surface when someone proposes a handoff project again:
+  // cross-cohort learning is the point (§6.2).
+  const priorHandoff = await db.project.create({
+    data: {
+      title: "Standardised evening handoff using I-PASS on the medicine wards",
+      problemStatement:
+        "Evening handoffs between day and night residents on the medicine wards were unstructured, and the night team regularly re-derived plans that the day team had already made. Near-miss reports cited handoff omissions.",
+      status: "archived",
+      programId: medicine.id,
+      clinicalOwner: "Dr. H. Vasquez, Hospitalist Medical Director",
+      coachId: coachMed.id,
+      cohortYear: 2023,
+      clerDomain: "care_transitions",
+      approvedAt: daysAgo(1100),
+      completedAt: daysAgo(900),
+      archivedAt: daysAgo(880),
+      lastActivityAt: daysAgo(900),
+      outcomeSummary:
+        "Template use rose from about a fifth of handoffs to about two thirds on two wards within three months, then drifted back once the lead resident graduated.",
+      endReason:
+        "Ended when the resident lead graduated without a handoff; nobody owned the audit, so adherence was never measured again. The template itself still exists in the EHR.",
+    },
+  });
+  await db.aimStatement.create({
+    data: {
+      projectId: priorHandoff.id,
+      version: 1,
+      text: "Increase the proportion of evening handoffs on the medicine wards at University Hospital that use every I-PASS element from 20% (baseline, September 2023) to 80% by 31 March 2024.",
+      baselineValue: 20,
+      baselineUnit: "%",
+      baselinePeriod: "September 2023",
+      target: 80,
+      targetUnit: "%",
+      deadline: new Date("2024-03-31T00:00:00Z"),
+      population: "Resident-to-resident evening handoffs on the medicine wards",
+      createdAt: daysAgo(1100),
+    },
+  });
+
   // ============================================================= PROJECT 4
   // Deliberately bad (addition C6). Vague aim, no balancing measure, no
   // clinical owner. This is the thirty-second demo of intake blocking.
@@ -614,6 +737,7 @@ async function main(): Promise<void> {
       problemStatement: "Handoffs are inconsistent and we think patient safety could be better.",
       status: "draft",
       programId: medicine.id,
+      ownerId: traineeMed2.id,
       // No clinicalOwner: intake must block submission and say why.
       coachId: null,
       cohortYear: 2026,
@@ -654,38 +778,77 @@ async function main(): Promise<void> {
   });
 
   // ------------------------------------------------------------------ pulse
+  // The current quarter's survey is open: the default instrument (§6.4) plus
+  // one question of the chair's own. Twelve responses across three CLER
+  // domains (§8). Participation records who responded; the responses do not.
   const quarter = "2026-Q3";
+  const survey = await db.pulseSurvey.create({
+    data: {
+      quarter,
+      status: "open",
+      openedAt: daysAgo(80),
+      intro: "Five minutes, once a quarter. The committee reads themes drawn from these answers, never the answers themselves, and reports back what changed.",
+      questions: {
+        create: [
+          ...DEFAULT_INSTRUMENT.map((q, i) => ({ ...q, position: i })),
+          {
+            position: DEFAULT_INSTRUMENT.length,
+            kind: "single_choice" as const,
+            core: null,
+            prompt: "How much protected time did you have for improvement work this quarter?",
+            help: null,
+            required: false,
+            options: ["None", "Less than half a day a month", "Half a day to a day a month", "More than a day a month"],
+          },
+        ],
+      },
+    },
+    include: { questions: true },
+  });
+  const protectedTime = survey.questions.find((q) => q.core === null)!;
+
   const pulse: ReadonlyArray<{
     confidence: number;
     domain: "patient_safety" | "care_transitions" | "supervision";
     barrier: string;
-    name?: string;
+    /** Set only when the respondent chose to be identified. */
+    respondent?: { id: string; name: string };
+    /** Set only when the respondent chose to share their program. */
     programId?: string;
+    /** Who responded, for the participation record. */
+    by: { id: string };
+    time?: string;
   }> = [
-    { confidence: 2, domain: "care_transitions", barrier: "I could not get the data I needed. I asked for a report in March and still do not have it in September.", name: "Dr. J. Oyelaran", programId: medicine.id },
-    { confidence: 1, domain: "care_transitions", barrier: "Nobody told me who the analyst was. I emailed three people and gave up.", programId: medicine.id },
-    { confidence: 2, domain: "care_transitions", barrier: "The data request took so long that the resident who started the project had rotated off before it arrived.", programId: surgery.id },
-    { confidence: 3, domain: "patient_safety", barrier: "My project needed an order set change and I never found out who approves those.", programId: medicine.id },
-    { confidence: 2, domain: "patient_safety", barrier: "We were told to do a QI project but not given protected time, so it happened on days off or not at all.", name: "Dr. K. Aluko", programId: surgery.id },
-    { confidence: 1, domain: "patient_safety", barrier: "No protected time. Realistically this competes with sleep after nights.", programId: surgery.id },
-    { confidence: 4, domain: "supervision", barrier: "My coach was excellent but I only met them twice because of scheduling.", programId: medicine.id },
-    { confidence: 3, domain: "supervision", barrier: "I was assigned a coach outside my specialty who did not know the clinical context, so most meetings were spent explaining it.", programId: surgery.id },
-    { confidence: 2, domain: "supervision", barrier: "I did not know I was allowed to ask for a different coach.", programId: medicine.id },
-    { confidence: 4, domain: "care_transitions", barrier: "The handoff project template from last year was genuinely useful. More of that.", name: "Dr. P. Whitfield", programId: medicine.id },
-    { confidence: 5, domain: "patient_safety", barrier: "Having a statistician look at our run chart before the symposium changed how we presented it.", programId: medicine.id },
-    { confidence: 3, domain: "supervision", barrier: "Feedback on the abstract came after the submission deadline had passed.", programId: surgery.id },
+    { confidence: 2, domain: "care_transitions", barrier: "I could not get the data I needed. I asked for a report in March and still do not have it in September.", respondent: traineeMed1, programId: medicine.id, by: traineeMed1, time: "None" },
+    { confidence: 1, domain: "care_transitions", barrier: "Nobody told me who the analyst was. I emailed three people and gave up.", programId: medicine.id, by: rosterMed[0]!, time: "None" },
+    { confidence: 2, domain: "care_transitions", barrier: "The data request took so long that the resident who started the project had rotated off before it arrived.", programId: surgery.id, by: rosterSurg[0]! },
+    { confidence: 3, domain: "patient_safety", barrier: "My project needed an order set change and I never found out who approves those.", by: rosterMed[1]!, time: "Less than half a day a month" },
+    { confidence: 2, domain: "patient_safety", barrier: "We were told to do a QI project but not given protected time, so it happened on days off or not at all.", respondent: traineeSurg, programId: surgery.id, by: traineeSurg, time: "None" },
+    { confidence: 1, domain: "patient_safety", barrier: "No protected time. Realistically this competes with sleep after nights.", by: rosterSurg[1]!, time: "None" },
+    { confidence: 4, domain: "supervision", barrier: "My coach was excellent but I only met them twice because of scheduling.", programId: medicine.id, by: rosterMed[2]!, time: "Half a day to a day a month" },
+    { confidence: 3, domain: "supervision", barrier: "I was assigned a coach outside my specialty who did not know the clinical context, so most meetings were spent explaining it.", programId: surgery.id, by: rosterSurg[2]! },
+    { confidence: 2, domain: "supervision", barrier: "I did not know I was allowed to ask for a different coach.", by: rosterMed[3]!, time: "Less than half a day a month" },
+    { confidence: 4, domain: "care_transitions", barrier: "The handoff project template from last year was genuinely useful. More of that.", programId: medicine.id, by: rosterMed[4]! },
+    { confidence: 5, domain: "patient_safety", barrier: "Having a statistician look at our run chart before the symposium changed how we presented it.", programId: medicine.id, by: rosterMed[5]!, time: "More than a day a month" },
+    { confidence: 3, domain: "supervision", barrier: "Feedback on the abstract came after the submission deadline had passed.", by: rosterSurg[3]!, time: "Less than half a day a month" },
   ];
   const createdPulse = [];
-  for (const row of pulse) {
+  for (const [i, row] of pulse.entries()) {
+    await db.pulseParticipation.create({ data: { surveyId: survey.id, userId: row.by.id } });
     createdPulse.push(
       await db.pulseResponse.create({
         data: {
+          surveyId: survey.id,
           quarter,
           confidence: row.confidence,
           clerDomain: row.domain,
           barrierText: row.barrier,
-          respondentName: row.name ?? null,
+          respondentName: row.respondent?.name ?? null,
+          respondentUserId: row.respondent?.id ?? null,
           programId: row.programId ?? null,
+          // Spread over the quarter, so the demo does not show one busy day.
+          submittedOn: daysAgo(75 - i * 5),
+          ...(row.time ? { answers: { create: [{ questionId: protectedTime.id, text: row.time }] } } : {}),
         },
       }),
     );
@@ -708,10 +871,10 @@ async function main(): Promise<void> {
         "GMEC approved a named Decision Support liaison for GME quality improvement, with a standing two-week turnaround commitment for trainee data requests.",
       whatChanged:
         "There is now one named analyst liaison for trainee QI data requests, and requests are logged with a two-week turnaround commitment rather than routed ad hoc by email.",
-      raisedAt: daysAgo(210),
-      atGmecAt: daysAgo(150),
-      decidedAt: daysAgo(100),
-      closedAt: daysAgo(80),
+      raisedAt: daysAgo(62),
+      atGmecAt: daysAgo(50),
+      decidedAt: daysAgo(38),
+      closedAt: daysAgo(21),
       pulseResponses: { connect: createdPulse.slice(0, 3).map((p) => ({ id: p.id })) },
     },
   });
@@ -725,7 +888,7 @@ async function main(): Promise<void> {
       escalationTarget: "gmec",
       ownerId: chair.id,
       quarter,
-      raisedAt: daysAgo(60),
+      raisedAt: daysAgo(45),
       atGmecAt: daysAgo(20),
       pulseResponses: { connect: createdPulse.slice(4, 6).map((p) => ({ id: p.id })) },
     },
@@ -809,11 +972,12 @@ async function main(): Promise<void> {
       "seeded:",
       `  library docs        ${docs.length} (${localCount} isLocal placeholders requiring institutional content)`,
       `  programs            2`,
-      `  users               6 (1 chair, 2 coaches, 3 trainees)`,
-      `  projects            4 (active, complete, stalled, and one deliberately bad draft)`,
+      `  users               ${6 + rosterMed.length + rosterSurg.length} (1 chair, 2 coaches, 3 named trainees, ${rosterMed.length + rosterSurg.length} roster trainees)`,
+      `  projects            5 (active, complete, stalled, archived, and one deliberately bad draft)`,
       `  library measures    2 (one superseded, to exercise the deprecation banner)`,
-      `  data points         ${DISCHARGE_SERIES.length + LAB_SERIES.length}`,
-      `  pulse responses     ${pulse.length} across 3 CLER domains`,
+      `  data points         ${DISCHARGE_SERIES.length + LAB_SERIES.length + READMISSION_SERIES.length}`,
+      `  pulse survey        ${quarter}, open, default instrument + 1 chair question`,
+      `  pulse responses     ${pulse.length} across 3 CLER domains (${pulse.length - 8} not yet in a barrier)`,
       `  barriers            3 (raised, at_gmec, closed)`,
       `  knowledge gaps      2`,
       "",
@@ -822,7 +986,7 @@ async function main(): Promise<void> {
   );
 }
 
-main()
+runWithContext({ userId: null, acknowledgedPhi: new Set(), trustedContent: "seed" }, main)
   .catch((error: unknown) => {
     console.error(error);
     process.exit(1);

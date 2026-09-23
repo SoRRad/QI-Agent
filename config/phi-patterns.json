@@ -1,0 +1,40 @@
+{
+  "$comment": [
+    "PHI scanner extensions. The committee may ADD patterns here without a deploy: the file is re-read whenever it changes.",
+    "The built-in patterns from the approved tiering (Q7) are a floor defined in code, lib/phi/rules.ts. They cannot be removed or weakened from this file, so a malformed or deleted file can never switch the control off.",
+    "tier: 'block' refuses the write outright with no override. 'warn' requires the user to acknowledge before the write proceeds.",
+    "category: identifier | contact | date | location | name | other. Field exemptions apply by category: structured staff-name fields skip 'name' patterns; aim statement fields skip 'date' patterns.",
+    "Patterns are JavaScript regular expressions. Patterns with nested quantifiers, such as (a+)+, are rejected because they can hang the server on crafted input.",
+    "nameContextStopWords: capitalised words that, when they follow 'patient', form an ordinary phrase rather than a name, e.g. 'Patient Safety Committee'."
+  ],
+  "version": 1,
+  "additionalPatterns": [],
+  "nameContextStopWords": [
+    "Access",
+    "Advisory",
+    "Advocacy",
+    "Advocate",
+    "Care",
+    "Centered",
+    "Centred",
+    "Council",
+    "Education",
+    "Engagement",
+    "Experience",
+    "Family",
+    "Flow",
+    "Logistics",
+    "Outcomes",
+    "Placement",
+    "Portal",
+    "Quality",
+    "Relations",
+    "Reported",
+    "Rights",
+    "Safety",
+    "Satisfaction",
+    "Services",
+    "Transfer",
+    "Transport"
+  ]
+}

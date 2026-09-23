@@ -12,6 +12,7 @@
  */
 
 export type {
+  BaselineInfo,
   ChartKind,
   ChartLimits,
   ControlChartOptions,
@@ -41,6 +42,12 @@ export { analyseRunChart } from "./runChart";
 export { analyseControlChart, movingRangeChart } from "./controlChart";
 export type { MovingRangeChart } from "./controlChart";
 export { westernElectricViolations } from "./westernElectric";
+export {
+  analyseAgainstBaseline,
+  frozenParameters,
+  MINIMUM_BASELINE_POINTS,
+  RECOMMENDED_BASELINE_POINTS,
+} from "./baseline";
 
 import { analyseControlChart } from "./controlChart";
 import { analyseRunChart } from "./runChart";

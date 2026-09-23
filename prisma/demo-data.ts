@@ -66,3 +66,24 @@ export const LAB_SERIES: ReadonlyArray<{ label: string; count: number; days: num
   { label: "Nov 2025", count: 617, days: 431 },
   { label: "Dec 2025", count: 634, days: 446 },
 ] as const;
+
+/**
+ * Monthly 30-day readmission on the Hospitalist service, built on the 2024
+ * library definition that the committee later SUPERSEDED. Seeded so the
+ * deprecation banner (addition C3) is visible in a demo rather than
+ * theoretical: a chart whose meaning changed underneath it.
+ */
+export const READMISSION_SERIES: ReadonlyArray<{ label: string; readmitted: number; discharges: number }> = [
+  { label: "Oct 2025", readmitted: 17, discharges: 112 },
+  { label: "Nov 2025", readmitted: 15, discharges: 104 },
+  { label: "Dec 2025", readmitted: 19, discharges: 121 },
+  { label: "Jan 2026", readmitted: 14, discharges: 98 },
+  { label: "Feb 2026", readmitted: 18, discharges: 116 },
+  { label: "Mar 2026", readmitted: 16, discharges: 109 },
+  { label: "Apr 2026", readmitted: 20, discharges: 127 },
+  { label: "May 2026", readmitted: 15, discharges: 103 },
+  { label: "Jun 2026", readmitted: 17, discharges: 118 },
+  { label: "Jul 2026", readmitted: 13, discharges: 95 },
+  { label: "Aug 2026", readmitted: 16, discharges: 113 },
+  { label: "Sep 2026", readmitted: 18, discharges: 121 },
+] as const;
