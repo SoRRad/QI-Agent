@@ -19,7 +19,7 @@ promised:
 
 ## Status
 
-Phases 0 to 6 of 9 are complete.
+Phases 0 to 7 of 9 are complete.
 
 **Phase 0** — scaffold, data model, migrations, seed, the auth seam, the design
 system, the five-destination shell, Docker, and the health endpoint.
@@ -50,6 +50,14 @@ respondent's browser holds; response rate by program; theming into
 paraphrased themes; the barrier lifecycle; and the "You reported, we changed"
 digest, drafted from closed barriers only. Decisions are in
 `docs/ADR/0012-pulse.md`.
+
+**Phase 7** — Scholarship: a SQUIRE 2.0 draft assembled from the project's
+record, PDSA log and charts — no language model writes any of it, and every
+section needing the author is marked; an abstract formatter with a live word
+count against the venue's limit; venues ranked by fit and deadline from
+`content/venues.json`; and an IRB / QI screening that drafts a determination
+memo, citing the local policy or saying plainly that it is missing. Decisions
+are in `docs/ADR/0013-scholarship.md`.
 
 See `PLAN.md` for the build order and the exit criteria for each phase.
 Destination pages carry a dated note naming the phase that builds the feature

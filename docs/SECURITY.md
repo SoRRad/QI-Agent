@@ -145,7 +145,9 @@ Added because they are name fields by nature, listed here so the committee can
 object: program and user names and measure names (`name`), program director
 (`pdName`), the optional pulse respondent name (`respondentName`), symposium
 `presenters`, the data `puller`, and the sustainability plan's `changeOwner`
-and `reviewer`.
+and `reviewer`. From phase 7, the IRB screening `memo`, which the system
+composes: its names come from user records and its other text from the
+project record, all of which passed the guard when written.
 
 **Exempt from date patterns** — the aim statement's `text` and
 `baselinePeriod`. The aim statement standard *requires* a calendar deadline and
@@ -153,7 +155,8 @@ a baseline period, so without this exemption every valid aim would raise a
 warning, and a warning that fires on every aim teaches people to click through
 warnings. A date of birth after "DOB" in an aim is still blocked. Also the
 handoff packet's generated `summary` (phase 5): it quotes the current aim, and
-its author did not write it.
+its author did not write it. Likewise the IRB screening `memo` (phase 7), which
+carries the screening date and the aim's deadline.
 
 Exemptions are keyed by model *and* field: `AimStatement.text` is exempt,
 `DriverNode.text` is not. (Until phase 5 they were keyed by field name alone,
@@ -214,7 +217,8 @@ project's clinical owner, sponsor and analyst contact. From phase 5: the driver
 diagram, the equity stratification plan, and why the stall job flagged a
 project. (The equity plan was previously unlisted, so chair-only by default;
 making it readable by its own program was a deliberate choice, recorded here
-for the committee to review.)
+for the committee to review.) From phase 7: abstract drafts and IRB / QI screenings, which carry
+results and the ethics status of work not yet published.
 
 An assigned coach reads a project's restricted material wherever they sit; a
 coach with no assignment to it does not, even in the same program.

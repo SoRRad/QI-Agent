@@ -41,6 +41,8 @@ export type AuditAction =
   | "barrier.created"
   | "barrier.updated"
   | "barrier.status_changed"
+  | "scholarship.abstract_saved"
+  | "scholarship.precheck_run"
   | "export.generated"
   | "job.run";
 
