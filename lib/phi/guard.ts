@@ -34,6 +34,9 @@ export const NAME_EXEMPT_FIELDS: Readonly<Record<string, readonly string[]>> = {
   puller: ["MeasureDefinition"],
   changeOwner: ["SustainabilityPlan"],
   reviewer: ["SustainabilityPlan"],
+  // The screening memo is composed by the system: the lead, coach and preparer
+  // come from User.name, the rest from record text that passed the guard.
+  memo: ["IrbPrecheck"],
 };
 
 /**
@@ -50,6 +53,8 @@ export const DATE_EXEMPT_FIELDS: Readonly<Record<string, readonly string[]>> = {
   // quotes the current aim, deadline included. Its author did not write it,
   // so asking them to vouch for the aim's dates again would be noise.
   summary: ["Handoff"],
+  // Likewise the screening memo: the screening date and the aim's deadline.
+  memo: ["IrbPrecheck"],
 };
 
 /**

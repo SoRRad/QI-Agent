@@ -31,6 +31,7 @@ export function ActionForm({
   className,
   submitClassName,
   intent,
+  resetOnSuccess = true,
 }: {
   action: (state: FormState, formData: FormData) => Promise<FormState>;
   hidden: Record<string, string>;
@@ -46,13 +47,15 @@ export function ActionForm({
   submitClassName?: string;
   /** Extra submit buttons that set `intent`. */
   intent?: Array<{ value: string; label: string; variant?: "primary" | "secondary" | "signal" }>;
+  /** False for forms that keep editing in place after a save, like a draft with a live word count. */
+  resetOnSuccess?: boolean;
 }) {
   const [state, formAction, pending] = useActionState<FormState, FormData>(action, { status: "idle" });
   const [submitted, setSubmitted] = useState<Record<string, string>>({});
   const form = useRef<HTMLFormElement>(null);
   useEffect(() => {
-    if (state.status === "done") form.current?.reset();
-  }, [state]);
+    if (state.status === "done" && resetOnSuccess) form.current?.reset();
+  }, [state, resetOnSuccess]);
 
   return (
     <form

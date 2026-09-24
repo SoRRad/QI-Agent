@@ -18,3 +18,4 @@ what would make us revisit it.
 | [0010](0010-spc-studio.md) | The SPC studio: URL state, frozen baselines, special-cause encoding, write-once reproducibility evidence |
 | [0011](0011-projects-workspace.md) | Projects: intake blockers, owner and handoff, the prediction lock, stall signals, per-model PHI exemptions |
 | [0012](0012-pulse.md) | Pulse: participation apart from responses, browser-held receipts, frozen surveys, paraphrase check, closed-only digest |
+| [0013](0013-scholarship.md) | Scholarship: SQUIRE assembled from the record, a screening that cites policy or declares the gap, validated venues |

@@ -15,6 +15,7 @@ import { createDb } from "@/lib/db";
 import { loadLibraryDocs } from "@/lib/content";
 import { runWithContext } from "@/lib/request-context";
 import { DEFAULT_INSTRUMENT } from "@/lib/pulse/instrument";
+import { draftMemo, screen, type Answers } from "@/lib/scholarship/irb";
 import { DISCHARGE_SERIES, LAB_SERIES, READMISSION_SERIES } from "./demo-data";
 
 // The seed writes through the SAME guarded client as the application. It runs
@@ -44,6 +45,8 @@ async function clear(): Promise<void> {
   await db.pulseParticipation.deleteMany();
   await db.pulseQuestion.deleteMany();
   await db.pulseSurvey.deleteMany();
+  await db.irbPrecheck.deleteMany();
+  await db.abstractDraft.deleteMany();
   await db.sustainabilityPlan.deleteMany();
   await db.handoff.deleteMany();
   await db.pdsaCycle.deleteMany();
@@ -967,6 +970,52 @@ async function main(): Promise<void> {
     },
   });
 
+  // ------------------------------------------------------------ scholarship
+  // The flagship project has been screened once, so its SQUIRE draft shows
+  // an ethics section from the record and its memo shows the policy gap: the
+  // IRB policy document is still a placeholder.
+  const screeningAnswers: Answers = {
+    purpose: "local",
+    assignment: "no",
+    acceptedPractice: "yes",
+    risk: "no",
+    extraData: "no",
+    identifiableOut: "no",
+    funding: "no",
+    dissemination: "yes",
+  };
+  const irbPolicy = await db.libraryDoc.findUniqueOrThrow({ where: { slug: "local-irb-determination" } });
+  const flagship = await db.project.findUniqueOrThrow({
+    where: { id: discharge.id },
+    select: {
+      aimStatements: { orderBy: { version: "desc" }, take: 1, select: { text: true } },
+      measures: { orderBy: { name: "asc" }, select: { name: true, definitions: { orderBy: { version: "desc" }, take: 1, select: { dataSource: true } } } },
+      driverNodes: { where: { kind: "change" }, orderBy: { position: "asc" }, select: { text: true } },
+      _count: { select: { pdsaCycles: true } },
+    },
+  });
+  const screening = screen(screeningAnswers);
+  const memo = draftMemo({
+    project: {
+      title: discharge.title,
+      program: medicine.name,
+      lead: traineeMed1.name,
+      coach: coachMed.name,
+      aim: flagship.aimStatements[0]?.text ?? null,
+      measures: flagship.measures.map((m) => ({ name: m.name, dataSource: m.definitions[0]?.dataSource ?? null })),
+      changeIdeas: flagship.driverNodes.map((d) => d.text),
+      cycles: flagship._count.pdsaCycles,
+    },
+    answers: screeningAnswers,
+    screening,
+    policy: { slug: irbPolicy.slug, title: irbPolicy.title, version: irbPolicy.version, updatedAt: irbPolicy.updatedAt, isLocal: irbPolicy.isLocal, localFieldsRequired: irbPolicy.localFieldsRequired },
+    preparedBy: traineeMed1.name,
+    date: daysAgo(40),
+  });
+  await db.irbPrecheck.create({
+    data: { projectId: discharge.id, answers: screeningAnswers as never, outcome: screening.outcome, memo: memo.text, createdById: traineeMed1.id, createdAt: daysAgo(40) },
+  });
+
   console.log(
     [
       "seeded:",
@@ -980,6 +1029,7 @@ async function main(): Promise<void> {
       `  pulse responses     ${pulse.length} across 3 CLER domains (${pulse.length - 8} not yet in a barrier)`,
       `  barriers            3 (raised, at_gmec, closed)`,
       `  knowledge gaps      2`,
+      `  IRB screenings      1 (flagship project; declares the missing local policy)`,
       "",
       "  dev sign-in: DEV_USER_EMAIL=chair@example.edu (or use the role switcher)",
     ].join("\n"),

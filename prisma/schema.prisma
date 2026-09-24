@@ -172,6 +172,8 @@ model User {
   pulseParticipations PulseParticipation[]
   pulseResponses      PulseResponse[]      @relation("PulseRespondent")
   pulseDigests        PulseDigest[]        @relation("DigestAuthor")
+  abstractDrafts      AbstractDraft[]      @relation("AbstractEditor")
+  irbPrechecks        IrbPrecheck[]        @relation("IrbPrecheckAuthor")
   judgeScores         JudgeScore[]         @relation("JudgeScoreJudge")
   curriculumRecords   CurriculumRecord[]
   milestoneMaps       MilestoneMap[]       @relation("MilestoneSubject")
@@ -234,6 +236,8 @@ model Project {
   milestoneMaps      MilestoneMap[]
   sustainabilityPlan SustainabilityPlan?
   driverNodes        DriverNode[]
+  abstractDrafts     AbstractDraft[]
+  irbPrechecks       IrbPrecheck[]
 
   @@index([programId, status])
   @@index([ownerId])
@@ -470,6 +474,53 @@ model SustainabilityPlan {
 
   project           Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
   continuingMeasure Measure? @relation(fields: [continuingMeasureId], references: [id], onDelete: SetNull)
+}
+
+// ---------------------------------------------------------------- scholarship
+
+// An abstract being written for one venue in /content/venues.json. One draft
+// per project and venue; the word limit and headings come from the venue.
+model AbstractDraft {
+  id          String   @id @default(cuid())
+  projectId   String
+  venueId     String
+  title       String?
+  // [{ heading, text }], in the venue's heading order.
+  sections    Json
+  updatedById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  updatedBy User?   @relation("AbstractEditor", fields: [updatedById], references: [id], onDelete: SetNull)
+
+  @@unique([projectId, venueId])
+}
+
+enum IrbScreenOutcome {
+  likely_qi
+  likely_research
+  ambiguous
+}
+
+// A QI-versus-research screening (§6.5). A screening, never a determination:
+// each is kept as a record of what was answered and when. Append-only.
+model IrbPrecheck {
+  id               String           @id @default(cuid())
+  projectId        String
+  answers          Json
+  outcome          IrbScreenOutcome
+  memo             String
+  // The local policy the memo cited, or null when it declared the gap.
+  policyDocId      String?
+  policyDocVersion Int?
+  createdById      String?
+  createdAt        DateTime         @default(now())
+
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdBy User?   @relation("IrbPrecheckAuthor", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([projectId, createdAt])
 }
 
 // ---------------------------------------------------------------- pulse

@@ -74,6 +74,9 @@ export const SENSITIVITY_POLICY: Readonly<Record<string, SensitivityTier>> = {
   "Project.stallReason": "owning_program",
   "Project.equityStratificationPlan": "owning_program",
   "DriverNode.*": "owning_program",
+  // Scholarship drafts carry results and the ethics screening: working record.
+  "AbstractDraft.*": "owning_program",
+  "IrbPrecheck.*": "owning_program",
   "DataPoint.*": "owning_program",
   "Annotation.*": "owning_program",
   "PdsaCycle.*": "owning_program",
