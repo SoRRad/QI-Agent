@@ -19,3 +19,4 @@ what would make us revisit it.
 | [0011](0011-projects-workspace.md) | Projects: intake blockers, owner and handoff, the prediction lock, stall signals, per-model PHI exemptions |
 | [0012](0012-pulse.md) | Pulse: participation apart from responses, browser-held receipts, frozen surveys, paraphrase check, closed-only digest |
 | [0013](0013-scholarship.md) | Scholarship: SQUIRE assembled from the record, a screening that cites policy or declares the gap, validated venues |
+| [0014](0014-committee.md) | Committee: headline chart with a pre-intervention median, shared ranks, kits as stored snapshots, milestone drafts that cite facts and never rate |

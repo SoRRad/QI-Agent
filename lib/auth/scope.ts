@@ -19,6 +19,8 @@ export type SensitivityTier =
   | "cross_program"
   /** Owning program, the project's assigned coach, and the chair. */
   | "owning_program"
+  /** The committee: coaches and the chair, in any program (phase 8). */
+  | "committee"
   /** Chair only. */
   | "chair_only";
 
@@ -65,6 +67,8 @@ export const SENSITIVITY_POLICY: Readonly<Record<string, SensitivityTier>> = {
   "PulseDigest.*": "cross_program",
   "Event.*": "cross_program",
   "Program.*": "cross_program",
+  // Coaches' declared expertise, so trainees can see who knows what.
+  "User.expertise": "cross_program",
 
   // --- restricted to owning program, assigned coach, chair -----------------
   "Project.obstacleNotes": "owning_program",
@@ -81,7 +85,7 @@ export const SENSITIVITY_POLICY: Readonly<Record<string, SensitivityTier>> = {
   "Annotation.*": "owning_program",
   "PdsaCycle.*": "owning_program",
   "Handoff.*": "owning_program",
-  "MilestoneMap.*": "owning_program",
+
   "Submission.*": "owning_program",
 
   // --- chair only ----------------------------------------------------------
@@ -92,6 +96,13 @@ export const SENSITIVITY_POLICY: Readonly<Record<string, SensitivityTier>> = {
   // Who responded is shown only as a rate by program.
   "PulseParticipation.*": "chair_only",
   "JudgeScore.*": "chair_only",
+  // --- the committee: coaches and the chair --------------------------------
+  // Who judges what, and what residents said in a mock CLER walkaround.
+  "JudgeAssignment.*": "committee",
+  "ClerQuestion.*": "committee",
+  // Draft evaluation text about a trainee: never the trainee's peers. The
+  // milestone service narrows it further, to the chair and the project's coach.
+  "MilestoneMap.*": "committee",
   "AuditLog.*": "chair_only",
   "KnowledgeGap.*": "chair_only",
   "UsageEvent.*": "chair_only",
@@ -145,6 +156,8 @@ export function canRead(
         actor.role === "coach" && !!resource.coachId && resource.coachId === actor.id;
       return sameProgram || isAssignedCoach;
     }
+    case "committee":
+      return actor.role === "coach";
     case "chair_only":
       return false;
   }

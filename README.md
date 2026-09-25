@@ -19,7 +19,7 @@ promised:
 
 ## Status
 
-Phases 0 to 7 of 9 are complete.
+Phases 0 to 8 of 9 are complete.
 
 **Phase 0** — scaffold, data model, migrations, seed, the auth seam, the design
 system, the five-destination shell, Docker, and the health endpoint.
@@ -58,6 +58,17 @@ count against the venue's limit; venues ranked by fit and deadline from
 `content/venues.json`; and an IRB / QI screening that drafts a determination
 memo, citing the local policy or saying plainly that it is missing. Decisions
 are in `docs/ADR/0013-scholarship.md`.
+
+**Phase 8** — Committee: the chair dashboard opens with the institution's
+headline measure as an annotated run chart, its median frozen before the first
+committee intervention, and every institution measure is a run chart. Event
+kits generated from the record; judging with conflict-free assignments, shared
+ranks for ties and a CSV export; the curriculum tracker with all-or-nothing CSV
+import; milestone evidence drafts that cite the record and are marked as
+requiring program director review; the mock CLER walkaround with a gap reading
+counted from the interviewer's ratings; coach matching that shows its
+arithmetic; and the annual report for the GMEC. Decisions are in
+`docs/ADR/0014-committee.md`.
 
 See `PLAN.md` for the build order and the exit criteria for each phase.
 Destination pages carry a dated note naming the phase that builds the feature

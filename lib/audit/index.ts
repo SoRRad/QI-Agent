@@ -43,6 +43,18 @@ export type AuditAction =
   | "barrier.status_changed"
   | "scholarship.abstract_saved"
   | "scholarship.precheck_run"
+  | "event.created"
+  | "event.kit_generated"
+  | "event.after_action_saved"
+  | "judging.assigned"
+  | "judging.unassigned"
+  | "judging.scored"
+  | "curriculum.imported"
+  | "milestone.drafted"
+  | "milestone.reviewed"
+  | "cler.mock_created"
+  | "cler.response_recorded"
+  | "coach.assigned"
   | "export.generated"
   | "job.run";
 

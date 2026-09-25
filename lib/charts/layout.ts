@@ -288,8 +288,13 @@ export function niceTicks(lo: number, hi: number, target: number): number[] {
   return ticks;
 }
 
-/** Formats a value for an axis or label, with decimals matched to the scale. */
+/**
+ * Formats a value for an axis or label, with as many decimals as the
+ * resolution itself carries: a 2.5 tick step needs one, or 32.5 would print
+ * as "33" and the axis would misstate its own gridlines.
+ */
 export function formatValue(value: number, unit: string, resolution: number): string {
-  const decimals = resolution >= 1 ? 0 : Math.min(3, Math.ceil(-Math.log10(resolution)));
+  let decimals = 0;
+  while (decimals < 3 && Math.abs(resolution * 10 ** decimals - Math.round(resolution * 10 ** decimals)) > 1e-9) decimals += 1;
   return `${value.toFixed(decimals)}${unit}`;
 }

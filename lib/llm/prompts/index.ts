@@ -1,9 +1,11 @@
 import { askAnswerPrompt } from "./askAnswer";
 import { chartInterpretationPrompt } from "./chartInterpretation";
+import { clerQuestionsPrompt } from "./clerQuestions";
 import { dataRequestPrompt } from "./dataRequest";
 import { definitionRestatementPrompt } from "./definitionRestatement";
 import { devilsAdvocatePrompt } from "./devilsAdvocate";
 import { duplicateRerankPrompt } from "./duplicateRerank";
+import { milestoneDraftPrompt } from "./milestoneDraft";
 import { pulseDigestPrompt } from "./pulseDigest";
 import { pulseThemePrompt } from "./pulseTheme";
 import { tutorPrompt } from "./tutor";
@@ -28,6 +30,10 @@ export { pulseThemePrompt, MAX_THEMES } from "./pulseTheme";
 export type { ThemeBarrier, ThemeInput, ThemeOutput, ThemeResponse } from "./pulseTheme";
 export { pulseDigestPrompt, digestSource } from "./pulseDigest";
 export type { DigestBarrier, DigestInput, DigestOutput } from "./pulseDigest";
+export { milestoneDraftPrompt } from "./milestoneDraft";
+export type { MilestoneDraftInput, MilestoneDraftOutput } from "./milestoneDraft";
+export { clerQuestionsPrompt } from "./clerQuestions";
+export type { ClerQuestionsInput, ClerQuestionsOutput } from "./clerQuestions";
 
 /**
  * Every prompt in the system. docs/PROMPTS.md must have a section for each id
@@ -44,4 +50,6 @@ export const ALL_PROMPTS: ReadonlyArray<PromptDefinition<never, unknown>> = [
   duplicateRerankPrompt as PromptDefinition<never, unknown>,
   pulseThemePrompt as PromptDefinition<never, unknown>,
   pulseDigestPrompt as PromptDefinition<never, unknown>,
+  milestoneDraftPrompt as PromptDefinition<never, unknown>,
+  clerQuestionsPrompt as PromptDefinition<never, unknown>,
 ];

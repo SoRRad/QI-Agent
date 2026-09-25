@@ -37,6 +37,9 @@ export const NAME_EXEMPT_FIELDS: Readonly<Record<string, readonly string[]>> = {
   // The screening memo is composed by the system: the lead, coach and preparer
   // come from User.name, the rest from record text that passed the guard.
   memo: ["IrbPrecheck"],
+  // The event kit is composed by the system from the event and its
+  // submissions: presenters come from Submission.presenters, already exempt.
+  kit: ["Event"],
 };
 
 /**
@@ -55,6 +58,10 @@ export const DATE_EXEMPT_FIELDS: Readonly<Record<string, readonly string[]>> = {
   summary: ["Handoff"],
   // Likewise the screening memo: the screening date and the aim's deadline.
   memo: ["IrbPrecheck"],
+  // The event kit states the event's date; a milestone draft quotes the
+  // current aim, deadline included, from facts that passed the guard.
+  kit: ["Event"],
+  evidenceText: ["MilestoneMap"],
 };
 
 /**

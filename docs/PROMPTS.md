@@ -342,3 +342,65 @@ barrier's own "what changed" text instead, and says so. Either way it is a
 draft: the chair edits it and publishes it, the PHI guard reads what is
 published, and publishing refuses any barrier that is not closed or has already
 been reported.
+
+## `committee.milestone_draft`
+
+**What it is for.** The ACGME milestone mapper (§6.6). For one resident on one
+project, it drafts short evidence paragraphs a program director can use when
+writing Systems-Based Practice and Practice-Based Learning and Improvement
+milestone evaluations. It is the feature most likely to bring program
+directors into the system, which is why its limits are strict.
+
+**What the model is shown.** Two things, both built by the system:
+
+- The list of subcompetencies from `content/milestones.json`: codes, titles,
+  and the committee's own one-line paraphrase of what each covers. No ACGME
+  level text is included.
+- Numbered facts from the project record (F1, F2, …): the resident's recorded
+  role (lead, handed over, took over, presented), the aim, the measures, the
+  SPC engine's own reading of each chart, each PDSA cycle's plan, prediction
+  and result, the sustainability plan, and the CLER focus area. No names, and
+  nothing the record does not hold.
+
+**What it must not do.**
+
+- Assign, suggest or imply a milestone level, or use rating words
+  ("proficient", "expert", "exceeds", "level"). The program director rates;
+  the draft describes evidence.
+- Write a paragraph without citing the facts it rests on, or cite a fact that
+  does not exist.
+- Introduce a number that is not in the facts that paragraph cites.
+- Name anyone. It writes "the resident".
+- Use a subcompetency code that is not on the list, or write two entries for
+  one code.
+
+**What happens if it breaks a rule.** Rejected and retried once; if the retry
+fails, nothing is saved and the page says the draft could not be written. A
+saved draft is stored with the facts it cites underneath, and it is marked
+**DRAFT — requires program director review** until a review is recorded. It
+also says plainly that the record does not attribute each step to one person,
+so the program director confirms the resident's own contribution. Drafts are
+visible only to the chair and the project's coach.
+
+## `committee.cler_questions`
+
+**What it is for.** The mock CLER walkaround (§6.6). It writes the questions an
+interviewer would ask residents and fellows during a Clinical Learning
+Environment Review, across the six focus areas, for the setting the chair
+names ("medicine wards").
+
+**What the model is shown.** The setting and who will be asked. Nothing else:
+no record, no response, no institutional policy.
+
+**What it must not do.**
+
+- Leave out a focus area, or ask more than three questions in one.
+- Include numbers or statistics.
+- Ask a resident to disclose anything about a patient.
+- Claim what the ACGME requires or what the institution's policy says.
+
+**What happens if it breaks a rule.** Rejected and retried once; if the retry
+fails, no walkaround is created. The model never sees an answer and never
+rates one: the interviewer records each answer by the respondent's role (never
+a name), rates it themselves, and the gap reading by focus area is counted by
+the system from those ratings.

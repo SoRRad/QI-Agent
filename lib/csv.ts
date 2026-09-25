@@ -111,3 +111,17 @@ export function parseCsv(input: string, maxRows = MAX_CSV_ROWS): CsvResult {
 
   return { headers, rows, delimiter, warnings, error: null };
 }
+
+/**
+ * Writes rows as RFC 4180 CSV with CRLF line endings. A cell a spreadsheet
+ * would run as a formula (leading =, +, -, @, tab or CR, unless it is a plain
+ * number) is prefixed with an apostrophe: exports carry user-entered titles,
+ * and "=HYPERLINK(...)" in a title must stay text when the chair opens it.
+ */
+export function toCsv(rows: ReadonlyArray<ReadonlyArray<string>>): string {
+  const cell = (value: string) => {
+    const safe = /^[=+\-@\t\r]/.test(value) && !/^-?\d+(\.\d+)?$/.test(value) ? `'${value}` : value;
+    return /[",\r\n]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
+  };
+  return rows.map((row) => row.map(cell).join(",")).join("\r\n") + "\r\n";
+}
