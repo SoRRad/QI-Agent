@@ -87,3 +87,40 @@ export const READMISSION_SERIES: ReadonlyArray<{ label: string; readmitted: numb
   { label: "Aug 2026", readmitted: 16, discharges: 113 },
   { label: "Sep 2026", readmitted: 18, discharges: 121 },
 ] as const;
+
+/**
+ * The institution's headline trainee-sensitive measure, which opens the chair
+ * dashboard (§7): discharge summaries signed more than 48 hours after
+ * discharge, across all inpatient services — the measure the flagship project
+ * moved on one service and the committee then adopted institution-wide.
+ *
+ * Thirteen months at a baseline near 31%, then a step down after the
+ * committee adopted huddle drafting as an institutional standard (Nov 2025).
+ * Verified in tests/committee to fire a shift on the run chart.
+ */
+export const INSTITUTION_SERIES: readonly DemoPoint[] = [
+  { label: "Oct 2024", den: 2410, num: 752 },
+  { label: "Nov 2024", den: 2355, num: 721 },
+  { label: "Dec 2024", den: 2502, num: 790 },
+  { label: "Jan 2025", den: 2468, num: 760 },
+  { label: "Feb 2025", den: 2298, num: 709 },
+  { label: "Mar 2025", den: 2531, num: 797 },
+  { label: "Apr 2025", den: 2444, num: 745 },
+  { label: "May 2025", den: 2489, num: 781 },
+  { label: "Jun 2025", den: 2376, num: 732 },
+  { label: "Jul 2025", den: 2420, num: 770 },
+  { label: "Aug 2025", den: 2455, num: 752 },
+  { label: "Sep 2025", den: 2398, num: 736 },
+  { label: "Oct 2025", den: 2472, num: 771 },
+  { label: "Nov 2025", den: 2430, num: 689 },
+  { label: "Dec 2025", den: 2517, num: 641 },
+  { label: "Jan 2026", den: 2446, num: 598 },
+  { label: "Feb 2026", den: 2311, num: 551 },
+  { label: "Mar 2026", den: 2503, num: 590 },
+  { label: "Apr 2026", den: 2462, num: 571 },
+  { label: "May 2026", den: 2480, num: 580 },
+  { label: "Jun 2026", den: 2391, num: 548 },
+  { label: "Jul 2026", den: 2437, num: 563 },
+  { label: "Aug 2026", den: 2468, num: 551 },
+  { label: "Sep 2026", den: 2420, num: 540 },
+];

@@ -147,7 +147,8 @@ object: program and user names and measure names (`name`), program director
 `presenters`, the data `puller`, and the sustainability plan's `changeOwner`
 and `reviewer`. From phase 7, the IRB screening `memo`, which the system
 composes: its names come from user records and its other text from the
-project record, all of which passed the guard when written.
+project record, all of which passed the guard when written. From phase 8, the
+generated event `kit`, whose names are the submissions' `presenters`.
 
 **Exempt from date patterns** — the aim statement's `text` and
 `baselinePeriod`. The aim statement standard *requires* a calendar deadline and
@@ -156,7 +157,10 @@ warning, and a warning that fires on every aim teaches people to click through
 warnings. A date of birth after "DOB" in an aim is still blocked. Also the
 handoff packet's generated `summary` (phase 5): it quotes the current aim, and
 its author did not write it. Likewise the IRB screening `memo` (phase 7), which
-carries the screening date and the aim's deadline.
+carries the screening date and the aim's deadline; and from phase 8 the event
+`kit`, which states the event's date, and a milestone draft's `evidenceText`,
+which quotes the aim from facts that passed the guard. The draft is still
+scanned for names, and its prompt rejects any name.
 
 Exemptions are keyed by model *and* field: `AimStatement.text` is exempt,
 `DriverNode.text` is not. (Until phase 5 they were keyed by field name alone,
@@ -211,7 +215,7 @@ library. Events.
 
 ### Restricted to the owning program, the assigned coach, and the chair
 
-Data points, PDSA cycle contents, handoff packets, milestone maps,
+Data points, PDSA cycle contents, handoff packets,
 symposium submissions, and any free text a trainee wrote about obstacles. The
 project's clinical owner, sponsor and analyst contact. From phase 5: the driver
 diagram, the equity stratification plan, and why the stall job flagged a
@@ -223,10 +227,22 @@ results and the ethics status of work not yet published.
 An assigned coach reads a project's restricted material wherever they sit; a
 coach with no assignment to it does not, even in the same program.
 
+### The committee: the chair and the coaches (phase 8)
+
+Judge assignments, and the mock CLER walkaround's questions and recorded
+answers (recorded by the respondent's role, never a name). Milestone evidence
+drafts are in this tier and narrowed further in the service: the chair, and the
+coach of that project only — the people who write to program directors. The
+data of institution-level library measures, which the chair dashboard plots,
+is readable by the chair and every coach; a project measure's data stays with
+its program.
+
 ### Chair only
 
-Named pulse responses, the raw barrier text behind a theme, judge scores,
-curriculum records, usage instrumentation, and the audit log. From phase 6:
+Named pulse responses, the raw barrier text behind a theme, judge scores
+(a judge reads and edits only their own; the board and the results are the
+chair's), curriculum records (the tracker, its export and the annual report
+that includes it), usage instrumentation, and the audit log. From phase 6:
 answers to the chair's own survey questions, and who responded (shown only as a
 response rate by program).
 

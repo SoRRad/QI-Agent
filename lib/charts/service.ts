@@ -13,7 +13,7 @@ import { parseStudioParams, studioChart, toObservations } from "./studio";
  * The measure and its definition are cross-program (Q4): anyone can see what
  * another program measures and how. Its data points and annotations belong to
  * the owning program, its coach and the chair. A library measure has no owning
- * project, so only the chair may change it.
+ * project: its data is the committee's to read and only the chair may change it.
  */
 
 export class MeasureNotFoundError extends Error {
@@ -62,7 +62,11 @@ export async function loadMeasure(user: User, measureId: string) {
   if (!measure) throw new MeasureNotFoundError();
 
   const resource = { programId: measure.project?.programId ?? null, coachId: measure.project?.coachId ?? null };
-  const canSeeData = !measure.isLibrary && canRead(user, "DataPoint", undefined, resource);
+  // An institution-level library measure's data is the committee's (phase 8):
+  // it is what the chair dashboard plots. A project measure's is its program's.
+  const canSeeData = measure.isLibrary
+    ? user.role === "chair" || user.role === "coach"
+    : canRead(user, "DataPoint", undefined, resource);
   const canEdit = user.role === "chair" || (!measure.isLibrary && canSeeData);
 
   const [points, annotations] = canSeeData

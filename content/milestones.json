@@ -1,0 +1,42 @@
+{
+  "note": "Maintained by the committee. Subcompetency codes and titles follow the harmonised Milestones 2.0 used by most specialties; numbering can differ in a specialty's own document, so confirm each code against the program's current ACGME Milestones before relying on it. The descriptions are the committee's paraphrase of what each subcompetency covers, not ACGME text, and carry no level language: levels are the program director's to assign.",
+  "lastReviewed": "2026-09-01",
+  "subcompetencies": [
+    {
+      "code": "SBP1",
+      "domain": "Systems-Based Practice",
+      "title": "Patient Safety",
+      "covers": "Recognising, reporting and analysing safety events and system vulnerabilities, and taking part in the response to them."
+    },
+    {
+      "code": "SBP2",
+      "domain": "Systems-Based Practice",
+      "title": "Quality Improvement",
+      "covers": "Using improvement methods — aims, measures, tests of change — to improve care for a population, and understanding local improvement priorities."
+    },
+    {
+      "code": "SBP3",
+      "domain": "Systems-Based Practice",
+      "title": "System Navigation for Patient-Centered Care",
+      "covers": "Coordinating care across settings and teams, including transitions of care and handing over responsibility."
+    },
+    {
+      "code": "SBP4",
+      "domain": "Systems-Based Practice",
+      "title": "Physician Role in Health Care Systems",
+      "covers": "Understanding how the health system's structure, resources and incentives shape care, and working within them to sustain change."
+    },
+    {
+      "code": "PBLI1",
+      "domain": "Practice-Based Learning and Improvement",
+      "title": "Evidence-Based and Informed Practice",
+      "covers": "Framing questions from practice, finding and appraising evidence, and using data about one's own practice or setting to guide decisions."
+    },
+    {
+      "code": "PBLI2",
+      "domain": "Practice-Based Learning and Improvement",
+      "title": "Reflective Practice and Commitment to Personal Growth",
+      "covers": "Seeking and acting on feedback, reflecting on performance, and adjusting one's approach when a test of change does not go as predicted."
+    }
+  ]
+}

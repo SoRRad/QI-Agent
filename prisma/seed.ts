@@ -16,7 +16,8 @@ import { loadLibraryDocs } from "@/lib/content";
 import { runWithContext } from "@/lib/request-context";
 import { DEFAULT_INSTRUMENT } from "@/lib/pulse/instrument";
 import { draftMemo, screen, type Answers } from "@/lib/scholarship/irb";
-import { DISCHARGE_SERIES, LAB_SERIES, READMISSION_SERIES } from "./demo-data";
+import { DISCHARGE_SERIES, INSTITUTION_SERIES, LAB_SERIES, READMISSION_SERIES } from "./demo-data";
+import { RUBRIC } from "@/lib/committee/rubric";
 
 // The seed writes through the SAME guarded client as the application. It runs
 // as trusted content, so warn-tier flags (the full dates in PDSA notes, for
@@ -31,6 +32,8 @@ const daysAgo = (n: number): Date => new Date(Date.now() - n * 24 * 60 * 60 * 10
 async function clear(): Promise<void> {
   // FK-safe order. AuditLog is deliberately absent: it is append-only.
   await db.judgeScore.deleteMany();
+  await db.judgeAssignment.deleteMany();
+  await db.clerQuestion.deleteMany();
   await db.submission.deleteMany();
   await db.event.deleteMany();
   await db.milestoneMap.deleteMany();
@@ -119,6 +122,11 @@ async function main(): Promise<void> {
     }
     return users;
   };
+  // Declared expertise, for coach matching (§6.6).
+  await db.user.update({ where: { id: chair.id }, data: { expertise: ["patient_safety", "health_care_quality"] } });
+  await db.user.update({ where: { id: coachMed.id }, data: { expertise: ["care_transitions", "health_care_quality"] } });
+  await db.user.update({ where: { id: coachSurg.id }, data: { expertise: ["patient_safety", "supervision"] } });
+
   const rosterMed = await roster(
     ["Dr. A. Mensah", "Dr. L. Castillo", "Dr. H. Novak", "Dr. R. Iyer", "Dr. C. Okafor", "Dr. M. Haddad", "Dr. E. Lindgren", "Dr. S. Tanaka", "Dr. B. Moreau", "Dr. D. Kowalski", "Dr. F. Osei", "Dr. G. Rahman"],
     "medicine",
@@ -189,6 +197,51 @@ async function main(): Promise<void> {
   await db.measure.update({
     where: { id: readmissionV1.id },
     data: { supersededById: readmissionV2.id },
+  });
+
+  // ------------------------------------------------ institution headline
+  // The measure that opens the chair dashboard (§7): the flagship project's
+  // measure, adopted institution-wide, annotated with committee interventions.
+  const headline = await db.measure.create({
+    data: {
+      name: "Discharge summaries signed more than 48 hours after discharge — all inpatient services",
+      type: "outcome",
+      chartType: "p",
+      isLibrary: true,
+      isHeadline: true,
+      promotedAt: daysAgo(400),
+      promotedById: chair.id,
+      definitions: {
+        create: {
+          version: 1,
+          numerator: "Discharge summaries with a signature timestamp more than 48 hours after the recorded discharge date and time.",
+          denominator: "All discharge summaries for adult inpatients discharged in the calendar month, all services.",
+          inclusions: "Adult inpatients discharged from any inpatient service.",
+          exclusions: "Deaths; transfers to another acute facility; patients who left against advice.",
+          dataSource: "EHR documentation report DSR-114, institution-wide run",
+          puller: "Decision Support — R. Iyer",
+          cadence: "monthly",
+          createdById: chair.id,
+        },
+      },
+      dataPoints: {
+        create: INSTITUTION_SERIES.map((p, i) => ({
+          periodIndex: i + 1,
+          periodLabel: p.label,
+          numerator: p.num,
+          denominator: p.den,
+          value: (p.num / p.den) * 100,
+          subgroupSize: p.den,
+          enteredById: chair.id,
+        })),
+      },
+      annotations: {
+        create: [
+          { date: new Date("2025-11-01T00:00:00Z"), periodIndex: 14, label: "Committee: huddle drafting adopted as an institutional standard" },
+          { date: new Date("2026-08-01T00:00:00Z"), periodIndex: 23, label: "GMEC: named analyst liaison for trainee data requests" },
+        ],
+      },
+    },
   });
 
   // ============================================================= PROJECT 1
@@ -930,6 +983,83 @@ async function main(): Promise<void> {
     },
   });
 
+  const labsSubmission = await db.submission.create({
+    data: {
+      eventId: symposium.id,
+      projectId: labs.id,
+      abstract:
+        "Background: Routine daily laboratory testing on the surgical ward was ordered by default. Methods: An order set change required an explicit indication for daily labs, tested over three PDSA cycles and assessed with a u-chart. Results: Routine draws per patient-day fell and stayed lower for two quarters, with no harm from delayed detection on chart review. Conclusions: Changing the default did more than education.",
+      presenters: "Dr. K. Aluko, Dr. T. Nakamura",
+    },
+  });
+  const sepsisSubmission = await db.submission.create({
+    data: {
+      eventId: symposium.id,
+      projectId: sepsis.id,
+      abstract:
+        "Background: Time to first antibiotic dose in suspected sepsis varied widely on the medicine wards. Methods: A nurse-initiated order pathway was planned; one PDSA cycle ran before the project stalled. Results: Too few data points to judge change. Conclusions: Work in progress; presented for feedback on the design.",
+      presenters: "Dr. P. Whitfield",
+    },
+  });
+  const dischargeSubmission = await db.submission.findFirstOrThrow({ where: { eventId: symposium.id, projectId: discharge.id } });
+
+  // Judges are never assigned a project they coach or lead. Discharge and
+  // labs are scored to tie exactly (a mean of 54.5 of 60) so the results
+  // export shows a shared rank; sepsis is still missing one judge's scores.
+  const judged: Array<{ submissionId: string; judgeId: string; scores: number[] | null }> = [
+    { submissionId: dischargeSubmission.id, judgeId: chair.id, scores: [5, 4, 5, 5, 4, 4] },
+    { submissionId: dischargeSubmission.id, judgeId: coachSurg.id, scores: [4, 5, 4, 5, 4, 5] },
+    { submissionId: labsSubmission.id, judgeId: chair.id, scores: [5, 5, 4, 5, 4, 4] },
+    { submissionId: labsSubmission.id, judgeId: coachMed.id, scores: [4, 4, 5, 5, 4, 5] },
+    { submissionId: sepsisSubmission.id, judgeId: chair.id, scores: [3, 4, 3, 2, 3, 4] },
+    { submissionId: sepsisSubmission.id, judgeId: coachSurg.id, scores: null },
+  ];
+  for (const j of judged) {
+    await db.judgeAssignment.create({ data: { submissionId: j.submissionId, judgeId: j.judgeId } });
+    if (j.scores) {
+      await db.judgeScore.create({
+        data: {
+          submissionId: j.submissionId,
+          judgeId: j.judgeId,
+          rubricScores: Object.fromEntries(RUBRIC.map((c, i) => [c.id, j.scores![i]!])),
+        },
+      });
+    }
+  }
+
+  // A mock CLER walkaround, part-way through: questions across the six focus
+  // areas, some answered and rated.
+  const clerMock = await db.event.create({
+    data: {
+      quarter,
+      type: "cler_mock",
+      date: daysAgo(10),
+      title: "Mock CLER walkaround — medicine wards",
+    },
+  });
+  const clerQuestions: Array<{ domain: "patient_safety" | "health_care_quality" | "care_transitions" | "supervision" | "well_being" | "professionalism"; question: string; respondent?: string; response?: string; rating?: "clear" | "partial" | "unable" }> = [
+    { domain: "patient_safety", question: "If you saw a near miss on this ward tonight, how would you report it, and what would happen next?", respondent: "PGY-2 resident", response: "Through the incident reporting system on the intranet; I have done it once and heard back from the unit manager.", rating: "clear" },
+    { domain: "health_care_quality", question: "Which quality improvement project on this service are you part of, and what is it measuring?", respondent: "PGY-1 resident", response: "Something about discharge summaries, but I do not know what it measures.", rating: "partial" },
+    { domain: "care_transitions", question: "How do you hand over a patient who is waiting for a test result overnight?", respondent: "PGY-2 resident", response: "Verbally at evening handoff, with the pending result on the list.", rating: "clear" },
+    { domain: "supervision", question: "When would you call your attending overnight without waiting for the morning?", respondent: "PGY-1 resident", response: "I am not sure there is a written policy; I would ask my senior.", rating: "unable" },
+    { domain: "well_being", question: "What would you do if a colleague seemed too exhausted to work safely?" },
+    { domain: "professionalism", question: "Where would you raise a concern about unprofessional behaviour by a senior colleague?" },
+  ];
+  for (const [position, q] of clerQuestions.entries()) {
+    await db.clerQuestion.create({
+      data: {
+        eventId: clerMock.id,
+        position,
+        domain: q.domain,
+        question: q.question,
+        respondent: q.respondent ?? null,
+        response: q.response ?? null,
+        rating: q.rating ?? null,
+        recordedById: q.response ? coachMed.id : null,
+      },
+    });
+  }
+
   // ------------------------------------------------------------- curriculum
   const curriculum = ["QI Fundamentals module", "Run chart workshop", "PDSA workshop", "Operational definitions workshop"];
   for (const user of [traineeMed1, traineeMed2, traineeSurg]) {
@@ -1030,6 +1160,9 @@ async function main(): Promise<void> {
       `  barriers            3 (raised, at_gmec, closed)`,
       `  knowledge gaps      2`,
       `  IRB screenings      1 (flagship project; declares the missing local policy)`,
+      `  headline measure    ${headline.name.split(" — ")[0]} (${INSTITUTION_SERIES.length} months, 2 committee annotations)`,
+      `  judging             3 submissions; two tied at the top; one still awaiting a judge`,
+      `  CLER mock           ${clerQuestions.length} questions, 4 answered`,
       "",
       "  dev sign-in: DEV_USER_EMAIL=chair@example.edu (or use the role switcher)",
     ].join("\n"),

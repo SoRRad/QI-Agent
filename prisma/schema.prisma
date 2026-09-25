@@ -157,6 +157,11 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // CLER focus areas a coach or the chair is experienced in, for coach
+  // matching (§6.6). Declared, not inferred: a coach's past projects are a
+  // weak signal of what they can teach.
+  expertise ClerDomain[]
+
   program Program? @relation(fields: [programId], references: [id], onDelete: SetNull)
 
   coachedProjects     Project[]            @relation("ProjectCoach")
@@ -175,6 +180,8 @@ model User {
   abstractDrafts      AbstractDraft[]      @relation("AbstractEditor")
   irbPrechecks        IrbPrecheck[]        @relation("IrbPrecheckAuthor")
   judgeScores         JudgeScore[]         @relation("JudgeScoreJudge")
+  judgeAssignments    JudgeAssignment[]    @relation("JudgeAssignee")
+  clerQuestionsAsked  ClerQuestion[]       @relation("ClerRecorder")
   curriculumRecords   CurriculumRecord[]
   milestoneMaps       MilestoneMap[]       @relation("MilestoneSubject")
   milestoneReviews    MilestoneMap[]       @relation("MilestonePdReviewer")
@@ -319,6 +326,11 @@ model Measure {
   // Deprecation (addition C3). Charts built on a superseded definition carry a
   // banner naming the change and the date; silently changing the meaning of a
   // shared definition is what destroys trust in year two.
+  // The institution's headline trainee-sensitive measure, which opens the
+  // chair dashboard as an annotated run chart (§7). A library measure; at
+  // most one (partial unique index), and never a project's (CHECK).
+  isHeadline Boolean @default(false)
+
   deprecated      Boolean   @default(false)
   deprecatedAt    DateTime?
   deprecationNote String?
@@ -703,10 +715,15 @@ model Event {
   agenda          String?
   materials       String?
   afterActionNote String?
+  // The generated event kit (§6.6): agenda, invitation, slide skeleton,
+  // judging rubric, feedback form. Templates filled from the record.
+  kit             Json?
+  kitGeneratedAt  DateTime?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
-  submissions Submission[]
+  submissions   Submission[]
+  clerQuestions ClerQuestion[]
 
   @@index([quarter])
 }
@@ -719,9 +736,10 @@ model Submission {
   presenters String
   createdAt  DateTime @default(now())
 
-  event   Event        @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  project Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  scores  JudgeScore[]
+  event       Event             @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  project     Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  scores      JudgeScore[]
+  assignments JudgeAssignment[]
 
   @@unique([eventId, projectId])
   @@index([eventId])
@@ -736,8 +754,10 @@ model JudgeScore {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  submission Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
-  judge      User       @relation("JudgeScoreJudge", fields: [judgeId], references: [id], onDelete: Cascade)
+  submission Submission      @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  judge      User            @relation("JudgeScoreJudge", fields: [judgeId], references: [id], onDelete: Cascade)
+  // A score is accepted only from a judge assigned to the submission.
+  assignment JudgeAssignment @relation(fields: [submissionId, judgeId], references: [submissionId, judgeId], onDelete: Cascade)
 
   @@unique([submissionId, judgeId])
   @@index([submissionId])
@@ -774,6 +794,49 @@ model MilestoneMap {
 
   @@index([projectId])
   @@index([userId])
+}
+
+// A judge assigned to a submission. Scores are only accepted from assigned
+// judges, and a judge is never assigned a project they coach or lead.
+model JudgeAssignment {
+  submissionId String
+  judgeId      String
+  createdAt    DateTime @default(now())
+
+  submission Submission  @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  judge      User        @relation("JudgeAssignee", fields: [judgeId], references: [id], onDelete: Cascade)
+  score      JudgeScore?
+
+  @@id([submissionId, judgeId])
+  @@index([judgeId])
+}
+
+enum ClerRating {
+  clear
+  partial
+  unable
+}
+
+// A question in a CLER mock walkaround (an Event of type cler_mock), with the
+// response the interviewer recorded and how well it was answered.
+model ClerQuestion {
+  id           String      @id @default(cuid())
+  eventId      String
+  position     Int
+  domain       ClerDomain
+  question     String
+  // Who was asked, by role only ("PGY-2 resident"), never by name.
+  respondent   String?
+  response     String?
+  rating       ClerRating?
+  notes        String?
+  recordedById String?
+  updatedAt    DateTime    @updatedAt
+
+  event      Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  recordedBy User? @relation("ClerRecorder", fields: [recordedById], references: [id], onDelete: SetNull)
+
+  @@index([eventId, position])
 }
 
 // ---------------------------------------------------------------- library

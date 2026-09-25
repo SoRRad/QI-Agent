@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { db } from "@/lib/db";
 import { ForbiddenError, requireRole } from "@/lib/auth";
-import { COMMITTEE_SECTIONS, SectionTabs } from "@/components/ui/SectionTabs";
+import { committeeSections, SectionTabs } from "@/components/ui/SectionTabs";
 import { Badge, Banner, PageHeader, PlotFrame } from "@/components/ui/primitives";
 
 export const dynamic = "force-dynamic";
@@ -52,7 +52,7 @@ export default async function LibraryAdminPage({
           ) : undefined
         }
       />
-      <SectionTabs label="Committee sections" current="library" items={COMMITTEE_SECTIONS} />
+      <SectionTabs label="Committee sections" current="library" items={committeeSections(user.role)} />
 
       <div className="flex flex-col gap-4">
         {saved && <Banner tone="confirm" title="Saved">The new version is live in Ask.</Banner>}

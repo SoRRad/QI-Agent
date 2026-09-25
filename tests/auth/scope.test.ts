@@ -61,6 +61,17 @@ describe("the cross-cohort learning layer", () => {
   });
 });
 
+describe("committee material", () => {
+  it("is readable by any coach and the chair, and by no trainee", () => {
+    expect(canRead(surgCoach, "ClerQuestion", "response")).toBe(true);
+    expect(canRead(chair, "JudgeAssignment", "judgeId")).toBe(true);
+    expect(canRead(medTrainee, "ClerQuestion", "response")).toBe(false);
+    // A trainee never reads a milestone draft, even about a project in their program.
+    expect(canRead(medTrainee, "MilestoneMap", "evidenceText", medProject)).toBe(false);
+    expect(canRead(medCoach, "JudgeScore", "rubricScores")).toBe(false);
+  });
+});
+
 describe("material restricted to the owning program", () => {
   it("hides data points and PDSA contents from another program", () => {
     expect(canRead(surgTrainee, "DataPoint", "value", medProject)).toBe(false);
@@ -137,8 +148,8 @@ describe("redactForActor", () => {
 });
 
 describe("policy integrity", () => {
-  it("uses only the three defined tiers", () => {
-    const allowed = new Set(["cross_program", "owning_program", "chair_only"]);
+  it("uses only the four defined tiers", () => {
+    const allowed = new Set(["cross_program", "owning_program", "committee", "chair_only"]);
     for (const [key, tier] of Object.entries(SENSITIVITY_POLICY)) {
       expect(allowed.has(tier), `${key} has unknown tier ${tier}`).toBe(true);
     }
